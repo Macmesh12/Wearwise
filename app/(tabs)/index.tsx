@@ -1,92 +1,114 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
+  Linking,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
+import { supabase } from "../../lib/supabase";
 
-const categories = ["All", "Minimal", "Typography", "Illustration", "Retro"];
+type Category = "T-shirts" | "Jerseys";
 
-const designs = [
-  {
-    id: "sun-club",
-    title: "Sun Club",
-    category: "Illustration",
-    image:
-      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "good-energy",
-    title: "Good Energy",
-    category: "Typography",
-    image:
-      "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "weekend-uniform",
-    title: "Weekend Uniform",
-    category: "Minimal",
-    image:
-      "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=85",
-  },
-  {
-    id: "soft-life",
-    title: "Soft Life",
-    category: "Retro",
-    image:
-      "https://images.unsplash.com/photo-1562157873-818bc0726f68?auto=format&fit=crop&w=900&q=85",
-  },
-];
+type Design = {
+  id: string;
+  title: string | null;
+  category: Category;
+  image_path: string;
+  preview_path: string | null;
+};
+
+const categories: Category[] = ["T-shirts", "Jerseys"];
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
-  const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
+  const [designs, setDesigns] = useState<Design[]>([]);
+  const [activeCategory, setActiveCategory] = useState<Category>("T-shirts");
+  const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const columns = width >= 1100 ? 4 : width >= 760 ? 3 : 2;
   const pagePadding = width >= 760 ? 36 : 18;
   const contentWidth = Math.min(width, 1280) - pagePadding * 2;
-  const cardGap = 16;
-  const cardWidth = (contentWidth - cardGap * (columns - 1)) / columns;
+  const gap = 16;
+  const cardWidth = (contentWidth - gap * (columns - 1)) / columns;
 
-  const visibleDesigns = designs.filter((design) => {
-    const matchesCategory =
-      activeCategory === "All" || design.category === activeCategory;
-    const matchesSearch = design.title
-      .toLowerCase()
-      .includes(search.trim().toLowerCase());
+  useEffect(() => {
+    let cancelled = false;
 
-    return matchesCategory && matchesSearch;
-  });
+    async function loadDesigns() {
+      const { data, error: queryError } = await supabase
+        .from("designs")
+        .select("id, title, category, image_path, preview_path")
+        .eq("published", true)
+        .order("created_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (queryError) {
+        setError(queryError.message);
+      } else {
+        setDesigns((data ?? []) as Design[]);
+      }
+
+      setLoading(false);
+    }
+
+    loadDesigns();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleDesigns = designs.filter(
+    (design) => design.category === activeCategory,
+  );
+
+  function getImageUrl(path: string) {
+    return supabase.storage.from("designs").getPublicUrl(path).data.publicUrl;
+  }
+
+  function downloadSelectedDesign() {
+    if (!selectedDesign) return;
+
+    const downloadUrl = supabase.storage
+      .from("designs")
+      .getPublicUrl(selectedDesign.image_path, { download: true })
+      .data.publicUrl;
+
+    if (Platform.OS === "web") {
+      window.location.href = downloadUrl;
+    } else {
+      void Linking.openURL(downloadUrl);
+    }
+
+    setSelectedDesign(null);
+  }
 
   return (
-    <ScrollView style={styles.page}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={[styles.content, { paddingHorizontal: pagePadding }]}>
-        <Text style={styles.brand}>WEARWISE</Text>
-        <Text style={styles.heading}>Find your next favourite tee.</Text>
-        <Text style={styles.intro}>
-          Original T-shirt ideas from independent creators.
-        </Text>
+        <View style={styles.header}>
+          <Image
+            source={require("../../assets/images/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.brand}>WearWise</Text>
+        </View>
 
-        <TextInput
-          accessibilityLabel="Search designs"
-          placeholder="Search designs"
-          placeholderTextColor="#77766F"
-          value={search}
-          onChangeText={setSearch}
-          style={styles.search}
-        />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryList}
-        >
+        <View style={styles.categoryRow}>
           {categories.map((category) => {
             const selected = activeCategory === category;
 
@@ -110,96 +132,124 @@ export default function HomeScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
-
-        <Text style={styles.resultsHeading}>Discover designs</Text>
-
-        <View style={styles.gallery}>
-          {visibleDesigns.map((design) => (
-            <View key={design.id} style={{ width: cardWidth }}>
-              <Image source={{ uri: design.image }} style={styles.image} />
-              <Text style={styles.designTitle}>{design.title}</Text>
-              <Text style={styles.designCategory}>{design.category}</Text>
-            </View>
-          ))}
-
-          {visibleDesigns.length === 0 && (
-            <Text style={styles.emptyMessage}>
-              No designs found. Try another search.
-            </Text>
-          )}
         </View>
+
+        {loading ? (
+          <ActivityIndicator color="#FFFFFF" style={styles.message} />
+        ) : error ? (
+          <Text style={styles.message}>Could not load designs: {error}</Text>
+        ) : visibleDesigns.length === 0 ? (
+          <Text style={styles.message}>
+            {activeCategory === "Jerseys"
+              ? "Jersey designs are coming soon."
+              : "No T-shirt designs found."}
+          </Text>
+        ) : (
+          <View style={styles.gallery}>
+            {visibleDesigns.map((design) => (
+              <Pressable
+                key={design.id}
+                onLongPress={() => setSelectedDesign(design)}
+                delayLongPress={500}
+                accessibilityLabel="Long press to open download option"
+                style={{ width: cardWidth }}
+              >
+                <Image
+                  source={{
+                    uri: getImageUrl(design.preview_path ?? design.image_path),
+                  }}
+                  style={styles.designImage}
+                  resizeMode="cover"
+                />
+                {design.title ? (
+                  <Text style={styles.designTitle}>{design.title}</Text>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
+
+      <Modal
+        transparent
+        visible={selectedDesign !== null}
+        animationType="fade"
+        onRequestClose={() => setSelectedDesign(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Design options</Text>
+
+            <Pressable
+              onPress={downloadSelectedDesign}
+              style={styles.modalButton}
+            >
+              <Text style={styles.modalButtonText}>Download image</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setSelectedDesign(null)}
+              style={styles.cancelButton}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   page: {
+    marginTop: Platform.OS === "web" ? 0 : 24,
     flex: 1,
-    backgroundColor: "#F7F6F2",
+    backgroundColor: "#080808",
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   content: {
     width: "100%",
     maxWidth: 1280,
     alignSelf: "center",
-    paddingTop: 32,
-    paddingBottom: 64,
+    paddingTop: 24,
+    paddingBottom: 56,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 28,
+  },
+  logo: {
+    width: 48,
+    height: 48,
   },
   brand: {
-    color: "#326B52",
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 2,
-  },
-  heading: {
-    marginTop: 18,
-    color: "#20221F",
-    fontSize: 38,
+    color: "#D4AF37",
+    fontSize: 25,
     fontWeight: "700",
   },
-  intro: {
-    marginTop: 8,
-    color: "#696A64",
-    fontSize: 16,
-  },
-  search: {
-    height: 48,
-    marginTop: 24,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#E1E0D9",
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    color: "#20221F",
-    fontSize: 16,
-  },
-  categoryList: {
-    gap: 10,
-    paddingTop: 18,
-    paddingBottom: 28,
+  categoryRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
   },
   categoryButton: {
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: "#EAE9E3",
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
   categoryButtonSelected: {
-    backgroundColor: "#326B52",
+    borderBottomColor: "#FFFFFF",
   },
   categoryText: {
-    color: "#454640",
-    fontSize: 14,
+    color: "#FFFFFF",
+    fontSize: 16,
   },
   categoryTextSelected: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  resultsHeading: {
-    marginBottom: 16,
-    color: "#20221F",
-    fontSize: 22,
     fontWeight: "700",
   },
   gallery: {
@@ -207,26 +257,60 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 16,
   },
-  image: {
+  designImage: {
     width: "100%",
     aspectRatio: 0.82,
-    borderRadius: 12,
-    backgroundColor: "#EAE9E3",
+    borderRadius: 10,
+    backgroundColor: "#1C1C1C",
   },
   designTitle: {
-    marginTop: 10,
-    color: "#20221F",
+    marginTop: 8,
+    color: "#FFFFFF",
+    fontSize: 15,
+  },
+  message: {
+    marginTop: 32,
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    padding: 22,
+    borderRadius: 14,
+    backgroundColor: "#171717",
+  },
+  modalTitle: {
+    marginBottom: 18,
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  modalButton: {
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: "#2A2A2A",
+  },
+  modalButtonText: {
+    color: "#FFFFFF",
+    textAlign: "center",
     fontSize: 16,
     fontWeight: "600",
   },
-  designCategory: {
-    marginTop: 4,
-    marginBottom: 8,
-    color: "#77766F",
-    fontSize: 13,
+  cancelButton: {
+    padding: 12,
+    marginTop: 8,
   },
-  emptyMessage: {
-    color: "#696A64",
-    fontSize: 16,
+  cancelButtonText: {
+    color: "#FFFFFF",
+    textAlign: "center",
+    fontSize: 15,
   },
 });
