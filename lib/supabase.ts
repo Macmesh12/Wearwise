@@ -8,4 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Supabase URL or publishable key is missing from .env");
 }
 
+export const publicSupabaseUrl = supabaseUrl;
+export const publicSupabaseAnonKey = supabaseAnonKey;
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
