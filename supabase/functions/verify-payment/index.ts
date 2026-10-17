@@ -8,6 +8,16 @@ async function verifyAndSettle(reference: string, admin: ReturnType<typeof creat
   const result = await response.json().catch(() => null);
   if (!response.ok || !result?.status) throw new Error("Paystack could not verify this payment yet.");
   const payment = result.data;
+  if (["failed", "abandoned", "reversed"].includes(payment.status)) {
+    const { error: updateError } = await admin.from("order_payments")
+      .update({ status: "failed", notes: `Paystack payment ${payment.status}.`, updated_at: new Date().toISOString() })
+      .eq("provider", "paystack")
+      .eq("transaction_type", "payment")
+      .eq("provider_reference", reference)
+      .eq("status", "pending");
+    if (updateError) throw new Error("Payment was not completed. Please contact WearWise to retry.");
+    return "failed";
+  }
   if (payment.status !== "success") return "pending";
   const { data, error } = await admin.rpc("settle_paystack_order_payment", {
     p_reference: reference, p_amount: Number(payment.amount) / 100, p_currency: payment.currency, p_payment_method: payment.channel ?? "Paystack",

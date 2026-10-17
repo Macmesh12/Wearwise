@@ -30,6 +30,7 @@ Deno.serve(async (request) => {
 
   const siteUrl = Deno.env.get("SITE_URL") ?? "https://wearwise-gold.vercel.app";
   const callback = new URL("/payment-return", siteUrl);
+  callback.searchParams.set("orderCode", String(reservation.order_code));
   const response = await fetch("https://api.paystack.co/transaction/initialize", {
     method: "POST", headers: { Authorization: `Bearer ${paystackKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ email, amount: Math.round(amount * 100), currency: "GHS", reference, callback_url: callback.toString(), metadata: { order_code: reservation.order_code } }),
