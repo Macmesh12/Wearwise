@@ -26,7 +26,7 @@ type Design = {
   preview_path: string | null;
 };
 
-const categories: Category[] = ["T-shirts", "Jerseys"];
+const categories: Category[] = ["T-shirts"];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -62,6 +62,7 @@ export default function HomeScreen() {
         .from("designs")
         .select("id, title, category, image_path, preview_path")
         .eq("published", true)
+        .eq("category", "T-shirts")
         .order("created_at", { ascending: false });
 
       if (cancelled) return;
@@ -389,7 +390,7 @@ export default function HomeScreen() {
                         router.push({
                           pathname: "/order",
                           params: {
-                            orderType: "existing_design",
+                          orderType: "custom_design",
                             designId: design.id,
                           },
                         })
@@ -397,7 +398,7 @@ export default function HomeScreen() {
                       style={styles.orderDesignButton}
                     >
                       <Text style={styles.orderDesignButtonText}>
-                        Order this design
+                        Request this design
                       </Text>
                       <Text style={styles.orderDesignButtonArrow}>↗</Text>
                     </Pressable>

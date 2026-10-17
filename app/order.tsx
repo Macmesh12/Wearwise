@@ -81,8 +81,6 @@ export default function OrderRequestScreen() {
   const [customerRequest, setCustomerRequest] = useState("");
   const [printPlacement, setPrintPlacement] = useState("");
   const [customText, setCustomText] = useState("");
-  const [jerseyName, setJerseyName] = useState("");
-  const [jerseyNumber, setJerseyNumber] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("courier");
   const [deliveryArea, setDeliveryArea] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -91,13 +89,6 @@ export default function OrderRequestScreen() {
   const [website, setWebsite] = useState("");
 
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
-  const visibleProducts = useMemo(
-    () => orderType === "existing_design" && design
-      ? products.filter((product) => product.category === design.category)
-      : products,
-    [design, orderType, products],
-  );
-  const isJersey = selectedProduct?.category === "Jerseys";
   const contentWidth = width >= 860 ? 780 : width - 36;
 
   useEffect(() => {
@@ -106,11 +97,12 @@ export default function OrderRequestScreen() {
     async function loadOptions() {
       const [{ data: productData, error: productError }, designResult] = await Promise.all([
         supabase
-          .from("products")
-          .select("id, name, category, description, usual_sizes, usual_colors")
-          .eq("is_active", true)
+        .from("products")
+        .select("id, name, category, description, usual_sizes, usual_colors")
+        .eq("is_active", true)
+        .eq("category", "T-shirts")
           .order("created_at", { ascending: true }),
-        orderType === "existing_design" && designId
+        designId
           ? supabase
               .from("designs")
               .select("id, title, category, image_path, preview_path")
@@ -127,15 +119,15 @@ export default function OrderRequestScreen() {
         return;
       }
 
-      const loadedProducts = (productData ?? []) as Product[];
+      const loadedProducts = ((productData ?? []) as Product[]).filter((product) => product.category === "T-shirts");
       setProducts(loadedProducts);
       if (loadedProducts.length > 0) setProductId(loadedProducts[0].id);
       if (designResult.error || !designResult.data) {
-        if (orderType === "existing_design") {
-          setLoadError("That design is no longer available. Return to the gallery and choose another.");
-        }
+        if (designId) setLoadError("That design is no longer available. Return to Explore and choose another.");
       } else {
-        setDesign(designResult.data as Design);
+        const selectedDesign = designResult.data as Design;
+        if (selectedDesign.category !== "T-shirts") setLoadError("Explore currently accepts T-shirt design requests only.");
+        else setDesign(selectedDesign);
       }
       setLoading(false);
     }
@@ -145,13 +137,6 @@ export default function OrderRequestScreen() {
       cancelled = true;
     };
   }, [designId, orderType]);
-
-  useEffect(() => {
-    if (!visibleProducts.length || visibleProducts.some((product) => product.id === productId)) return;
-    setProductId(visibleProducts[0].id);
-    setSize("");
-    setColor("");
-  }, [productId, visibleProducts]);
 
   const sizeOptions = selectedProduct?.usual_sizes ?? [];
   const colorOptions = selectedProduct?.usual_colors ?? [];
@@ -199,7 +184,7 @@ export default function OrderRequestScreen() {
     const urgentDays = Number(rushDaysEarly || 0);
 
     if (!selectedProduct) {
-      setSubmitError("Choose a shirt type before sending your request.");
+      setSubmitError("We can’t accept a design request right now. Please try again later.");
       return;
     }
     if (!customerName.trim() || !customerPhone.trim()) {
@@ -232,8 +217,6 @@ export default function OrderRequestScreen() {
       customization: {
         printPlacement: printPlacement.trim(),
         customText: customText.trim(),
-        jerseyName: jerseyName.trim(),
-        jerseyNumber: jerseyNumber.trim(),
       },
       customer: {
         name: customerName.trim(),
@@ -284,14 +267,14 @@ export default function OrderRequestScreen() {
           <Text style={styles.eyebrow}>REQUEST RECEIVED</Text>
           <Text style={styles.successTitle}>Thanks, {customerName.split(" ")[0]}.</Text>
           <Text style={styles.bodyText}>
-            Your request is with WearWise. We’ll confirm the price and check the requested shirt options before asking you to pay.
+            Your request is with WearWise. We’ll first check that we can source your requested size and colour and make the design. Then we’ll confirm the price with you on WhatsApp.
           </Text>
           <View style={styles.orderCodeCard}>
             <Text style={styles.fieldLabel}>YOUR REQUEST CODE</Text>
             <Text style={styles.successCode}>{orderCode}</Text>
           </View>
           <Text style={styles.smallNote}>
-            Custom design work starts after your payment is confirmed. Shirt color and size are subject to sourcing. If your choice isn’t available, we’ll offer an alternative or arrange a refund.
+            You’ll only be asked to pay after we confirm we can make your order and agree on the price. We begin the design work after your payment is confirmed.
           </Text>
           <Pressable onPress={() => router.replace("/")} style={styles.primaryButton}>
             <Text style={styles.primaryButtonText}>Back to the collection</Text>
@@ -323,27 +306,25 @@ export default function OrderRequestScreen() {
 
             <View style={styles.pageIntro}>
               <View style={styles.eyebrowPill}><Text style={styles.eyebrow}>MADE AROUND YOUR IDEA</Text></View>
-              <Text style={styles.pageTitle}>{orderType === "existing_design" ? "Make it yours." : "Let’s create your look."}</Text>
+              <Text style={styles.pageTitle}>{design ? "Make this design yours." : "Let’s create your look."}</Text>
               <Text style={styles.introText}>
-                Tell us what you have in mind. We’ll confirm your total and sourcing details before you pay.
+                Share your idea and requested size and colour. We’ll check availability and confirm the price with you on WhatsApp before you pay.
               </Text>
             </View>
 
             {loading ? (
-              <View style={styles.loadingBox}><ActivityIndicator color={palette.plum} /><Text style={styles.helpText}>Loading shirt options…</Text></View>
+              <View style={styles.loadingBox}><ActivityIndicator color={palette.plum} /><Text style={styles.helpText}>Loading request options…</Text></View>
             ) : loadError ? (
               <View style={styles.errorBox}><Text style={styles.errorText}>{loadError}</Text></View>
-            ) : visibleProducts.length === 0 ? (
+            ) : !selectedProduct ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>
-                  {orderType === "existing_design" && design
-                    ? `There are no active ${design.category.toLowerCase()} types to match this design yet.`
-                    : "There are no active shirt types to order right now. Please check back soon."}
+                  We’re not accepting custom T-shirt requests right now. Please check back soon.
                 </Text>
               </View>
             ) : (
               <>
-                {orderType === "existing_design" && design ? (
+                {design ? (
                   <View style={styles.selectedDesignCard}>
                     {designImageUrl ? <Image source={{ uri: designImageUrl }} style={styles.selectedDesignImage} resizeMode="cover" /> : null}
                     <View style={styles.selectedDesignCopy}>
@@ -354,28 +335,8 @@ export default function OrderRequestScreen() {
                 ) : null}
 
                 <View style={styles.formCard}>
-                  <Step number="01" title="Choose your shirt" detail="Your requested option is subject to sourcing." />
-                  <View style={styles.productChoices}>
-                    {visibleProducts.map((product) => {
-                      const active = product.id === productId;
-                      return (
-                        <Pressable
-                          key={product.id}
-                          onPress={() => {
-                            setProductId(product.id);
-                            setSize("");
-                            setColor("");
-                          }}
-                          style={[styles.productChoice, active && styles.productChoiceActive]}
-                        >
-                          <Text style={[styles.productChoiceCategory, active && styles.productChoiceCategoryActive]}>{product.category}</Text>
-                          <Text style={[styles.productChoiceName, active && styles.productChoiceNameActive]}>{product.name}</Text>
-                          {product.description ? <Text style={[styles.productChoiceDescription, active && styles.productChoiceDescriptionActive]} numberOfLines={2}>{product.description}</Text> : null}
-                          <Text style={[styles.productChoiceAvailability, active && styles.productChoiceAvailabilityActive]}>Availability confirmed after request</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                  <Step number="01" title="Your T-shirt" detail="There’s one shirt type for now. We’ll check your requested size and colour before confirming." />
+                  {selectedProduct.description ? <Text style={styles.helpText}>{selectedProduct.description}</Text> : null}
 
                   <View style={styles.twoColumns}>
                     <ChoiceField label="Requested size" value={size} onChangeText={setSize} options={sizeOptions} placeholder="Choose or type a size" />
@@ -405,12 +366,6 @@ export default function OrderRequestScreen() {
                     <Field label="Print placement" value={printPlacement} onChangeText={setPrintPlacement} placeholder="Front, back, or sleeve" />
                     <Field label="Custom text" value={customText} onChangeText={setCustomText} placeholder="Name, phrase, or leave blank" />
                   </View>
-                  {isJersey ? (
-                    <View style={styles.twoColumns}>
-                      <Field label="Name on jersey" value={jerseyName} onChangeText={setJerseyName} placeholder="Name" />
-                      <Field label="Number on jersey" value={jerseyNumber} onChangeText={setJerseyNumber} placeholder="Number" keyboardType="number-pad" />
-                    </View>
-                  ) : null}
                   <Field
                     label={orderType === "custom_design" ? "Describe your idea or requested changes" : "Anything else you’d like changed?"}
                     value={customerRequest}
@@ -464,7 +419,7 @@ export default function OrderRequestScreen() {
                 <View style={styles.paymentPromise}>
                   <Text style={styles.paymentPromiseMark}>✓</Text>
                   <Text style={styles.paymentPromiseText}>
-                    We’ll confirm the price and sourcing terms first. You pay before we prepare a custom design. If your requested shirt isn’t available, we’ll offer an alternative or a refund.
+                    First, we’ll confirm on WhatsApp that your requested size and colour are available and that we can make the design. You’ll agree to the price and pay before we begin designing.
                   </Text>
                 </View>
 

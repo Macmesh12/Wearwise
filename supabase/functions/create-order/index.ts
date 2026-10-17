@@ -133,9 +133,7 @@ Deno.serve(async (request) => {
   if (method === "courier" && !cleanText(delivery?.address, 500)) {
     return jsonResponse(400, { error: "Add the delivery address for your courier request." });
   }
-  if (orderType === "existing_design" && !designId) {
-    return jsonResponse(400, { error: "Select a design from the gallery first." });
-  }
+  if (orderType === "existing_design" && !designId) return jsonResponse(400, { error: "Select a design from the gallery first." });
 
   const fileValue = formData.get("artwork");
   let artworkFile: File | null = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
@@ -154,7 +152,7 @@ Deno.serve(async (request) => {
   }
 
   const customText = cleanText(customization?.customText, 250);
-  if (orderType === "custom_design" && !artworkFile && !customerRequest && !customText) {
+  if (orderType === "custom_design" && !artworkFile && !designId && !customerRequest && !customText) {
     return jsonResponse(400, { error: "Describe your design idea or attach a reference image." });
   }
 
@@ -170,7 +168,7 @@ Deno.serve(async (request) => {
   }
 
   let designSnapshot: Record<string, unknown> = {};
-  if (orderType === "existing_design") {
+  if (designId) {
     const { data: design, error: designError } = await admin
       .from("designs")
       .select("id, title, category, image_path, preview_path")
@@ -258,8 +256,6 @@ Deno.serve(async (request) => {
   const itemDetails = {
     printPlacement: cleanText(customization?.printPlacement, 80),
     customText,
-    jerseyName: cleanText(customization?.jerseyName, 80),
-    jerseyNumber: cleanText(customization?.jerseyNumber, 10),
   };
 
   const { error: itemError } = await admin.from("order_items").insert({

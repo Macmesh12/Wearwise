@@ -99,6 +99,7 @@ type Order = {
   order_type: "existing_design" | "custom_design";
   status: OrderStatus;
   payment_status: string;
+  availability_confirmed_at: string | null;
   customer_name: string;
   customer_phone: string;
   customer_email: string | null;
@@ -231,6 +232,7 @@ export default function AdminScreen() {
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [quoteOrderId, setQuoteOrderId] = useState<string | null>(null);
   const [paymentLinkOrderId, setPaymentLinkOrderId] = useState<string | null>(null);
+  const [availabilityConfirmed, setAvailabilityConfirmed] = useState(false);
   const [quoteSubtotal, setQuoteSubtotal] = useState("");
   const [quoteDiscount, setQuoteDiscount] = useState("");
   const [quoteDeliveryFee, setQuoteDeliveryFee] = useState("");
@@ -311,7 +313,7 @@ export default function AdminScreen() {
       supabase
         .from("orders")
         .select(
-          "id, order_code, order_type, status, payment_status, customer_name, customer_phone, customer_email, delivery_method, delivery_area, delivery_address, delivery_instructions, customer_request, customer_artwork_path, estimated_delivery_date, currency_code, subtotal, discount_amount, delivery_fee, rush_days_early, rush_fee, total_amount, amount_paid, amount_refunded, actual_sourcing_cost, actual_printing_cost, actual_delivery_cost, actual_payment_fee, actual_other_cost, admin_notes, created_at",
+          "id, order_code, order_type, status, payment_status, availability_confirmed_at, customer_name, customer_phone, customer_email, delivery_method, delivery_area, delivery_address, delivery_instructions, customer_request, customer_artwork_path, estimated_delivery_date, currency_code, subtotal, discount_amount, delivery_fee, rush_days_early, rush_fee, total_amount, amount_paid, amount_refunded, actual_sourcing_cost, actual_printing_cost, actual_delivery_cost, actual_payment_fee, actual_other_cost, admin_notes, created_at",
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -638,6 +640,7 @@ export default function AdminScreen() {
     setQuoteDiscount(String(order.discount_amount));
     setQuoteDeliveryFee(String(order.delivery_fee));
     setQuoteRushDays(String(order.rush_days_early));
+    setAvailabilityConfirmed(Boolean(order.availability_confirmed_at));
     setError(null);
     setMessage(null);
   }
@@ -648,6 +651,11 @@ export default function AdminScreen() {
     const deliveryFee = Number(quoteDeliveryFee || 0);
     const rushDays = Number(quoteRushDays || 0);
     const values = [subtotal, discount, deliveryFee, rushDays];
+
+    if (order.order_type === "custom_design" && !availabilityConfirmed) {
+      setError("Confirm that you can source the requested size and colour and make the design before saving a quote.");
+      return;
+    }
 
     if (values.some((value) => !Number.isFinite(value) || value < 0) || !Number.isInteger(rushDays)) {
       setError("Check the quote amounts and urgent days. They must be valid positive numbers.");
@@ -676,6 +684,9 @@ export default function AdminScreen() {
         rush_days_early: rushDays,
         rush_fee: rushFee,
         total_amount: total,
+        availability_confirmed_at: order.order_type === "custom_design"
+          ? order.availability_confirmed_at ?? new Date().toISOString()
+          : order.availability_confirmed_at,
         status: "awaiting_payment",
         updated_at: new Date().toISOString(),
       })
@@ -687,9 +698,21 @@ export default function AdminScreen() {
       return;
     }
     setQuoteOrderId(null);
-    setMessage(`Quote saved for ${order.order_code}. The customer can now be asked to pay.`);
+    setMessage(`Quote saved for ${order.order_code}. Confirm the price and payment steps with the customer on WhatsApp.`);
     await loadOrders();
     setUpdatingOrderId(null);
+  }
+
+  function contactCustomOrderOnWhatsApp(order: Order) {
+    const phone = order.customer_phone.replace(/\D/g, "");
+    if (!phone) {
+      setError("This request has no usable phone number for WhatsApp.");
+      return;
+    }
+    const paymentUrl = `${typeof window !== "undefined" ? window.location.origin : "https://wearwise-gold.vercel.app"}/pay?orderCode=${encodeURIComponent(order.order_code)}`;
+    const requestedOptions = order.items.map((item) => `${item.requested_size || "size not specified"}, ${item.requested_color || "colour not specified"}`).join("; ");
+    const message = `Hi ${order.customer_name.split(" ")[0]}, I’ve checked your WearWise request ${order.order_code}. I can source the requested T-shirt option (${requestedOptions}) and make this design. Your total is ${formatMoney(order.total_amount)}. If you’d like to go ahead, you can pay securely here: ${paymentUrl}. I’ll begin the design work after payment is confirmed.`;
+    void Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
   }
 
   function closeTransactionForm() {
@@ -1179,6 +1202,11 @@ export default function AdminScreen() {
                         <Text style={styles.orderActionText}>{paymentLinkOrderId === order.id ? "Hide payment link" : "Show customer payment link"}</Text>
                       </Pressable>
                     ) : null}
+                    {order.order_type === "custom_design" && order.status === "awaiting_payment" && remainingToPay > 0 ? (
+                      <Pressable onPress={() => contactCustomOrderOnWhatsApp(order)} style={styles.orderActionButton}>
+                        <Text style={styles.orderActionText}>Confirm quote on WhatsApp ↗</Text>
+                      </Pressable>
+                    ) : null}
                     {order.status === "refund_pending" && remainingToRefund > 0 ? (
                       <Pressable
                         onPress={() => openTransactionForm(order, "refund")}
@@ -1213,8 +1241,18 @@ export default function AdminScreen() {
                     <View style={styles.transactionForm}>
                       <Text style={styles.transactionTitle}>Prepare customer quote</Text>
                       <Text style={styles.helpText}>
-                        Confirm the order total before requesting payment. Urgent requests add 20% of the subtotal for each day earlier.
+                        {order.order_type === "custom_design"
+                          ? "Check the requested T-shirt size and colour with your supplier and confirm you can make the design before preparing the quote."
+                          : "Confirm the order total before requesting payment. Urgent requests add 20% of the subtotal for each day earlier."}
                       </Text>
+                      {order.order_type === "custom_design" ? (
+                        <Pressable onPress={() => setAvailabilityConfirmed((value) => !value)} style={styles.activeRow}>
+                          <View style={[styles.checkbox, availabilityConfirmed && styles.checkboxChecked]}>
+                            {availabilityConfirmed ? <Text style={styles.checkmark}>✓</Text> : null}
+                          </View>
+                          <Text style={styles.bodyText}>I confirmed the requested size and colour are available and I can make this design.</Text>
+                        </Pressable>
+                      ) : null}
                       <Field label="Subtotal (GHS)" value={quoteSubtotal} onChangeText={setQuoteSubtotal} keyboardType="decimal-pad" />
                       <Field label="Discount (GHS, optional)" value={quoteDiscount} onChangeText={setQuoteDiscount} keyboardType="decimal-pad" />
                       <Field label="Delivery fee (GHS)" value={quoteDeliveryFee} onChangeText={setQuoteDeliveryFee} keyboardType="decimal-pad" />
@@ -1243,7 +1281,7 @@ export default function AdminScreen() {
                       </View>
                       <View style={styles.productActions}>
                         <Pressable onPress={() => void saveQuote(order)} disabled={updatingOrderId === order.id} style={styles.orderActionButton}>
-                          <Text style={styles.orderActionText}>{updatingOrderId === order.id ? "Saving…" : "Save quote · request payment"}</Text>
+                          <Text style={styles.orderActionText}>{updatingOrderId === order.id ? "Saving…" : order.order_type === "custom_design" ? "Confirm availability and save quote" : "Save quote · request payment"}</Text>
                         </Pressable>
                         <Pressable onPress={() => setQuoteOrderId(null)} style={styles.smallButton}>
                           <Text style={styles.smallButtonText}>Cancel</Text>
