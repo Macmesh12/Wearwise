@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +14,6 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
 type Category = "T-shirts" | "Jerseys";
@@ -163,9 +163,21 @@ export default function HomeScreen() {
               <Text style={styles.brandCaption}>WEAR YOUR STORY</Text>
             </View>
           </View>
-          <View style={styles.headerTag}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.headerTagText}>MADE FOR YOU</Text>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => router.push("/shop")}
+              style={({ pressed }) => [
+                styles.shopNavButton,
+                pressed && styles.controlPressed,
+              ]}
+            >
+              <Text style={styles.shopNavButtonText}>Shop</Text>
+              <Text style={styles.shopNavButtonArrow}>↗</Text>
+            </Pressable>
+            <View style={styles.headerTag}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.headerTagText}>MADE FOR YOU</Text>
+            </View>
           </View>
         </View>
 
@@ -176,7 +188,7 @@ export default function HomeScreen() {
             <View style={styles.eyebrow}>
               <Text style={styles.eyebrowText}>YOUR STYLE, YOUR STORY</Text>
             </View>
-            <Text style={styles.heroTitle}>
+            <Text style={[styles.heroTitle, width < 620 && styles.heroTitleMobile]}>
               Wear something{"\n"}
               <Text style={styles.heroTitleAccent}>that feels like you.</Text>
             </Text>
@@ -200,7 +212,10 @@ export default function HomeScreen() {
                   params: { orderType: "custom_design" },
                 })
               }
-              style={styles.customRequestLink}
+              style={({ pressed }) => [
+                styles.customRequestLink,
+                pressed && styles.linkPressed,
+              ]}
             >
               <Text style={styles.customRequestLinkText}>
                 Have your own idea? Request a custom design ↗
@@ -209,19 +224,14 @@ export default function HomeScreen() {
           </View>
 
           <View style={[styles.heroArt, width < 620 && styles.heroArtMobile]}>
-            <View style={styles.orbit} />
-            <View style={styles.sun} />
-            <View style={styles.artSticker}>
-              <Text style={styles.stickerStar}>✳</Text>
-              <Text style={styles.stickerText}>A LITTLE{"\n"}MORE YOU</Text>
-            </View>
+            {visibleDesigns[0] ? (
+              <Image source={{ uri: getImageUrl(visibleDesigns[0].preview_path ?? visibleDesigns[0].image_path) }} style={styles.heroDesignImage} resizeMode="cover" />
+            ) : <View style={styles.heroImageFallback}><Text style={styles.heroFallbackWord}>WW</Text></View>}
             <View style={styles.heroLabel}>
-              <Text style={styles.heroLabelSmall}>FIND YOUR</Text>
-              <Text style={styles.heroLabelBig}>FIT.</Text>
+              <Text style={styles.heroLabelSmall}>WEARWISE</Text>
+              <Text style={styles.heroLabelBig}>YOUR NEXT FIT</Text>
             </View>
           </View>
-          <View style={styles.heroBlobOne} />
-          <View style={styles.heroBlobTwo} />
         </Animated.View>
 
         <View
@@ -311,7 +321,10 @@ export default function HomeScreen() {
           </View>
 
           {loading ? (
-            <ActivityIndicator color={palette.plum} style={styles.message} />
+            <ActivityIndicator
+              color={palette.plum}
+              style={[styles.message, styles.loadingState]}
+            />
           ) : error ? (
             <Text style={styles.message}>Could not load designs: {error}</Text>
           ) : visibleDesigns.length === 0 ? (
@@ -390,12 +403,15 @@ export default function HomeScreen() {
                         router.push({
                           pathname: "/order",
                           params: {
-                          orderType: "custom_design",
+                            orderType: "custom_design",
                             designId: design.id,
                           },
                         })
                       }
-                      style={styles.orderDesignButton}
+                      style={({ pressed }) => [
+                        styles.orderDesignButton,
+                        pressed && styles.controlPressed,
+                      ]}
                     >
                       <Text style={styles.orderDesignButtonText}>
                         Request this design
@@ -447,7 +463,10 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={() => setSelectedDesign(null)}
-              style={styles.cancelButton}
+              style={({ pressed }) => [
+                styles.cancelButton,
+                pressed && styles.linkPressed,
+              ]}
             >
               <Text style={styles.cancelButtonText}>Maybe later</Text>
             </Pressable>
@@ -481,13 +500,13 @@ function Promise({
 }
 
 const palette = {
-  paper: "#FAF8F3",
-  ink: "#25262B",
-  muted: "#77777C",
-  plum: "#6250B5",
-  violet: "#E8E2FF",
-  orange: "#F28A62",
-  line: "#E8E4DC",
+  paper: "#F7F7F5",
+  ink: "#17191D",
+  muted: "#737780",
+  plum: "#D65B3E",
+  violet: "#F2EDE8",
+  orange: "#D65B3E",
+  line: "#E4E6E9",
   white: "#FFFFFF",
 };
 
@@ -496,23 +515,31 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1 },
   content: {
     width: "100%",
-    maxWidth: 1280,
+    maxWidth: 1360,
     alignSelf: "center",
-    paddingTop: Platform.OS === "web" ? 22 : 34,
-    paddingBottom: 32,
+    paddingTop: Platform.OS === "web" ? 24 : 36,
+    paddingBottom: 44,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 24,
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.line,
   },
-  brandLockup: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandLockup: { flexDirection: "row", alignItems: "center", gap: 12 },
   logo: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 9,
     backgroundColor: palette.white,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   brand: {
     color: palette.ink,
@@ -522,7 +549,7 @@ const styles = StyleSheet.create({
   },
   brandCaption: {
     marginTop: 1,
-    color: palette.muted,
+    color: "#94A3B8",
     fontSize: 8,
     fontWeight: "700",
     letterSpacing: 1.7,
@@ -531,16 +558,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-    borderRadius: 30,
-    backgroundColor: "#EFECF9",
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(79,70,229,0.12)",
+    backgroundColor: "rgba(238,242,255,0.78)",
   },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  shopNavButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: palette.ink,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  shopNavButtonText: { color: palette.white, fontSize: 11, fontWeight: "800" },
+  shopNavButtonArrow: { color: palette.white, fontSize: 14, lineHeight: 15 },
   onlineDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: palette.plum,
+    backgroundColor: "#818CF8",
   },
   headerTagText: {
     color: palette.plum,
@@ -549,19 +595,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   hero: {
-    minHeight: 340,
+    minHeight: 330,
     flexDirection: "row",
     overflow: "hidden",
     position: "relative",
-    padding: 32,
-    borderRadius: 28,
-    backgroundColor: palette.violet,
+    padding: 38,
+    borderRadius: 7,
+    backgroundColor: "#EEEDEB",
   },
   heroMobile: {
     minHeight: 520,
     flexDirection: "column",
-    padding: 24,
-    paddingBottom: 10,
+    padding: 23,
+    paddingBottom: 18,
   },
   heroCopy: {
     zIndex: 2,
@@ -574,10 +620,8 @@ const styles = StyleSheet.create({
   eyebrow: {
     alignSelf: "flex-start",
     marginBottom: 17,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.72)",
+    paddingHorizontal: 0,
+    paddingVertical: 3,
   },
   eyebrowText: {
     color: palette.plum,
@@ -587,23 +631,24 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: palette.ink,
-    fontSize: 42,
-    lineHeight: 48,
+    fontSize: 43,
+    lineHeight: 49,
     fontWeight: "800",
     letterSpacing: -1.8,
   },
+  heroTitleMobile: { fontSize: 34, lineHeight: 39, letterSpacing: -1.2 },
   heroArtMobile: {
     alignSelf: "center",
     width: "100%",
     minWidth: 0,
-    height: 210,
-    flex: 1,
+    height: 205,
+    flex: 0,
   },
   heroTitleAccent: { color: palette.plum },
   heroDescription: {
     maxWidth: 380,
     marginTop: 13,
-    color: "#595862",
+    color: "#526174",
     fontSize: 15,
     lineHeight: 23,
   },
@@ -612,24 +657,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 20,
-    marginTop: 22,
+    marginTop: 26,
     paddingVertical: 13,
     paddingHorizontal: 17,
-    borderRadius: 12,
+    borderRadius: 13,
     backgroundColor: palette.ink,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4,
   },
   buttonPressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
+  controlPressed: { opacity: 0.86, transform: [{ scale: 0.98 }] },
+  linkPressed: { opacity: 0.62 },
   heroButtonText: { color: palette.white, fontSize: 13, fontWeight: "700" },
   heroButtonArrow: { color: palette.white, fontSize: 18, lineHeight: 19 },
-  customRequestLink: { alignSelf: "flex-start", marginTop: 13, paddingVertical: 5 },
-  customRequestLinkText: { color: palette.plum, fontSize: 12, fontWeight: "700" },
+  customRequestLink: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    paddingVertical: 7,
+  },
+  customRequestLinkText: {
+    color: palette.plum,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   heroArt: {
     width: "39%",
     minWidth: 220,
+    height: 270,
+    overflow: "hidden",
+    position: "relative",
     justifyContent: "center",
     alignItems: "center",
+    borderRadius: 5,
+    backgroundColor: "#E5E2DE",
     zIndex: 1,
   },
+  heroDesignImage: { width: "100%", height: "100%" },
+  heroImageFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", backgroundColor: "#E5E2DE" },
+  heroFallbackWord: { color: palette.plum, fontSize: 72, fontWeight: "900", letterSpacing: -6 },
   orbit: {
     position: "absolute",
     width: 245,
@@ -654,7 +722,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 80,
     borderTopLeftRadius: 34,
-    backgroundColor: "#A7C2A0",
+    backgroundColor: "#A8C6B0",
     transform: [{ rotate: "-8deg" }],
     shadowColor: "#51428f",
     shadowOpacity: 0.16,
@@ -676,21 +744,20 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 0,
     bottom: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#F8B398",
-    transform: [{ rotate: "5deg" }],
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.94)",
   },
   heroLabelSmall: {
-    color: "#603F36",
+    color: palette.muted,
     fontSize: 8,
     fontWeight: "800",
     letterSpacing: 1.2,
   },
   heroLabelBig: {
-    color: "#603F36",
-    fontSize: 21,
+    color: palette.ink,
+    fontSize: 14,
     fontWeight: "900",
     lineHeight: 23,
   },
@@ -701,7 +768,7 @@ const styles = StyleSheet.create({
     right: -75,
     bottom: -98,
     borderRadius: 90,
-    backgroundColor: "rgba(98,80,181,0.13)",
+    backgroundColor: "rgba(79,70,229,0.1)",
   },
   heroBlobTwo: {
     position: "absolute",
@@ -724,14 +791,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     flexDirection: "column",
     gap: 12,
-    paddingVertical: 17,
+    paddingVertical: 22,
   },
   promiseItem: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
   },
   promiseItemMobile: { justifyContent: "flex-start" },
   promiseIcon: { color: palette.plum, fontSize: 19, fontWeight: "700" },
@@ -740,13 +807,13 @@ const styles = StyleSheet.create({
   promiseDetail: { color: palette.muted, fontSize: 10 },
   promiseDivider: { width: 1, height: 30, backgroundColor: palette.line },
   promiseDividerMobile: { display: "none" },
-  gallerySection: { paddingTop: 35 },
+  gallerySection: { paddingTop: 42 },
   sectionHeadingRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
     gap: 14,
-    marginBottom: 19,
+    marginBottom: 22,
   },
   sectionHeadingRowMobile: { alignItems: "flex-start" },
   sectionHeadingCopy: { flex: 1 },
@@ -759,26 +826,31 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: palette.ink,
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: "800",
     letterSpacing: -0.8,
   },
   longPressHint: { color: palette.muted, fontSize: 11, paddingBottom: 4 },
-  categoryRow: { flexDirection: "row", gap: 8, marginBottom: 18 },
+  categoryRow: { flexDirection: "row", gap: 10, marginBottom: 22 },
   categoryButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
     borderWidth: 1,
-    borderColor: palette.line,
-    borderRadius: 24,
+    borderColor: "rgba(148,163,184,0.3)",
+    borderRadius: 5,
     backgroundColor: palette.white,
   },
   categoryButtonSelected: {
     borderColor: palette.plum,
     backgroundColor: palette.plum,
+    shadowColor: palette.plum,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   categoryPressed: { opacity: 0.82 },
   categoryText: { color: palette.ink, fontSize: 12, fontWeight: "700" },
@@ -790,13 +862,25 @@ const styles = StyleSheet.create({
     backgroundColor: "#F7B899",
   },
   gallery: { flexDirection: "row", flexWrap: "wrap" },
-  designCard: { marginBottom: 7 },
+  designCard: {
+    marginBottom: 14,
+    paddingBottom: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: palette.white,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
   designCardPressed: { opacity: 0.93, transform: [{ scale: 0.985 }] },
   imageFrame: {
     position: "relative",
     overflow: "hidden",
-    borderRadius: 17,
-    backgroundColor: "#EEEAE3",
+    borderRadius: 5,
+    backgroundColor: "#EEEDEB",
   },
   designImage: { width: "100%", aspectRatio: 0.82 },
   featuredBadge: {
@@ -806,7 +890,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: "rgba(250,248,243,0.92)",
+    backgroundColor: "rgba(255,255,255,0.88)",
   },
   featuredBadgeText: {
     color: palette.ink,
@@ -823,22 +907,47 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 16,
-    backgroundColor: "rgba(250,248,243,0.92)",
+    backgroundColor: "rgba(255,255,255,0.9)",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   cardArrowText: { color: palette.ink, fontSize: 16, fontWeight: "700" },
-  designMeta: { paddingHorizontal: 2, paddingTop: 9 },
+  designMeta: { paddingHorizontal: 13, paddingTop: 13 },
   designTitle: { color: palette.ink, fontSize: 13, fontWeight: "700" },
   designSubtitle: { marginTop: 3, color: palette.muted, fontSize: 10 },
-  orderDesignButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 9, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 9, backgroundColor: palette.violet },
-  orderDesignButtonText: { color: palette.plum, fontSize: 10, fontWeight: "800" },
-  orderDesignButtonArrow: { color: palette.plum, fontSize: 13, fontWeight: "800" },
+  orderDesignButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    backgroundColor: palette.violet,
+  },
+  orderDesignButtonText: {
+    color: palette.plum,
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  orderDesignButtonArrow: {
+    color: palette.plum,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   message: { marginTop: 30, color: palette.ink, fontSize: 15 },
+  loadingState: { minHeight: 220 },
   emptyState: {
     alignItems: "center",
-    paddingVertical: 42,
+    paddingVertical: 52,
     paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: "#F0EDF8",
+    borderWidth: 1,
+    borderColor: palette.line,
+    backgroundColor: "rgba(255,255,255,0.64)",
   },
   emptyIcon: { color: palette.plum, fontSize: 30, marginBottom: 8 },
   emptyTitle: {
@@ -857,10 +966,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginTop: 36,
-    padding: 18,
+    marginTop: 44,
+    padding: 20,
     borderRadius: 16,
-    backgroundColor: "#E8EFE6",
+    borderWidth: 1,
+    borderColor: "rgba(77,117,84,0.14)",
+    backgroundColor: "#EEF6EF",
   },
   bottomNoteMark: { color: "#4D7554", fontSize: 21 },
   bottomNoteText: {
@@ -883,15 +994,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-    backgroundColor: "rgba(37,38,43,0.56)",
+    backgroundColor: "rgba(15,23,42,0.58)",
   },
   modalCard: {
     width: "100%",
     maxWidth: 380,
     alignItems: "center",
-    padding: 26,
-    borderRadius: 23,
-    backgroundColor: palette.paper,
+    padding: 28,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.55)",
+    backgroundColor: "rgba(248,250,252,0.98)",
+    shadowColor: "#020617",
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
   modalIcon: {
     width: 48,

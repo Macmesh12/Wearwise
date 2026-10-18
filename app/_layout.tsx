@@ -51,6 +51,8 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
         <Stack.Screen name="admin" options={{ headerShown: false }} />
+        <Stack.Screen name="shop" options={{ headerShown: false }} />
+        <Stack.Screen name="shop-checkout" options={{ headerShown: false }} />
         <Stack.Screen name="order" options={{ headerShown: false }} />
         <Stack.Screen name="pay" options={{ headerShown: false }} />
         <Stack.Screen name="payment-return" options={{ headerShown: false }} />

@@ -3,18 +3,22 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pres
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { publicSupabaseAnonKey, publicSupabaseUrl } from "../lib/supabase";
 
-const colors = { paper: "#FAF8F3", ink: "#25262B", muted: "#77777C", plum: "#6250B5", violet: "#E8E2FF", line: "#E8E4DC", white: "#FFFFFF", red: "#B74A43", green: "#4D7554" };
+const colors = { paper: "#F7F7F5", ink: "#17191D", muted: "#737780", plum: "#D65B3E", violet: "#F2EDE8", line: "#E4E6E9", white: "#FFFFFF", red: "#B74A43", green: "#4D7554" };
 
 export default function PayScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ orderCode?: string }>();
+  const params = useLocalSearchParams<{ orderCode?: string; phone?: string; email?: string }>();
   const [orderCode, setOrderCode] = useState(typeof params.orderCode === "string" ? params.orderCode : "");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState(typeof params.phone === "string" ? params.phone : "");
+  const [email, setEmail] = useState(typeof params.email === "string" ? params.email : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => { if (typeof params.orderCode === "string") setOrderCode(params.orderCode); }, [params.orderCode]);
+  useEffect(() => {
+    if (typeof params.orderCode === "string") setOrderCode(params.orderCode);
+    if (typeof params.phone === "string") setPhone(params.phone);
+    if (typeof params.email === "string") setEmail(params.email);
+  }, [params.orderCode, params.phone, params.email]);
 
   async function startPayment() {
     setError("");
@@ -51,7 +55,7 @@ export default function PayScreen() {
             <Field label="Order code" value={orderCode} onChangeText={setOrderCode} placeholder="WW-1234ABCD" autoCapitalize="characters" />
             <Field label="Phone number used for the request" value={phone} onChangeText={setPhone} placeholder="Your phone number" keyboardType="phone-pad" />
             <Field label="Email for payment receipt" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
-            <Text style={styles.note}>Your payment is confirmed directly with Paystack before WearWise updates the order. Custom design work begins after the payment is confirmed.</Text>
+            <Text style={styles.note}>Paystack confirms your payment directly. WearWise updates the order and prepares the item or begins approved design work after payment.</Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable onPress={() => void startPayment()} disabled={busy} style={[styles.button, busy && styles.disabled]}>
               {busy ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Continue to secure payment ↗</Text>}

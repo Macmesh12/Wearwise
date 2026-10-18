@@ -1,6 +1,9 @@
 [functions.create-order]
 verify_jwt = false
 
+[functions.create-store-order]
+verify_jwt = false
+
 [functions.initialize-payment]
 verify_jwt = false
 

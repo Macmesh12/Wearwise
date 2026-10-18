@@ -38,15 +38,15 @@ type Design = {
 type DeliveryMethod = "campus_handoff" | "sister_office_handoff" | "courier" | "other";
 
 const palette = {
-  paper: "#FAF8F3",
-  ink: "#25262B",
-  muted: "#77777C",
-  plum: "#6250B5",
-  violet: "#E8E2FF",
-  line: "#E8E4DC",
+  paper: "#F7F7F5",
+  ink: "#17191D",
+  muted: "#737780",
+  plum: "#D65B3E",
+  violet: "#F2EDE8",
+  line: "#E4E6E9",
   white: "#FFFFFF",
   green: "#4D7554",
-  softGreen: "#E8EFE6",
+  softGreen: "#E8F2EB",
   red: "#B74A43",
 };
 

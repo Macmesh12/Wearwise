@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
   Image,
   Linking,
+  Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -11,6 +12,7 @@ import {
     TextInput,
     type TextInputProps,
     View,
+    useWindowDimensions,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -33,6 +35,25 @@ type Product = {
   estimated_shirt_cost: number | string | null;
   estimated_printing_cost: number | string | null;
 };
+
+type StoreItem = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price: number | string;
+  currency_code: string;
+  image_paths: string[];
+  size_options: string[];
+  color_options: string[];
+  is_available: boolean;
+  stock_quantity: number | null;
+  is_published: boolean;
+  purchase_cost: number | string | null;
+  other_cost: number | string | null;
+};
+
+type StoreItemRow = Omit<StoreItem, "purchase_cost" | "other_cost">;
 
 type ProductRow = Omit<
   Product,
@@ -73,7 +94,7 @@ type OrderItem = {
   requested_color: string | null;
   quantity: number;
   quoted_unit_price: number | string;
-  estimated_unit_cost: number | string;
+  estimated_unit_cost: number | string | null;
   actual_unit_cost: number | string;
   customization_details: Record<string, unknown>;
 };
@@ -96,7 +117,7 @@ type OrderPayment = {
 type Order = {
   id: string;
   order_code: string;
-  order_type: "existing_design" | "custom_design";
+  order_type: "existing_design" | "custom_design" | "store_purchase";
   status: OrderStatus;
   payment_status: string;
   availability_confirmed_at: string | null;
@@ -124,6 +145,7 @@ type Order = {
   actual_delivery_cost: number | string;
   actual_payment_fee: number | string;
   actual_other_cost: number | string;
+  actual_costs_recorded_at: string | null;
   admin_notes: string | null;
   created_at: string;
   items: OrderItem[];
@@ -131,12 +153,14 @@ type Order = {
 };
 
 type OrderFilter = "all" | "needs_attention" | "in_progress" | "completed";
+type AdminSection = "overview" | "orders" | "shop" | "catalog";
 
 const statusLabel = (status: string) =>
   status.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const nextStatuses: Partial<Record<OrderStatus, OrderStatus[]>> = {
   request_received: ["cancelled"],
+  awaiting_payment: ["cancelled"],
   paid: ["design_in_progress", "sourcing"],
   design_in_progress: ["proof_sent"],
   proof_sent: ["proof_approved", "revision_requested"],
@@ -208,7 +232,9 @@ function formatMoney(value: number | string | null) {
 }
 
 export default function AdminScreen() {
+  const { width } = useWindowDimensions();
   const pageMotion = useRef(new Animated.Value(0)).current;
+  const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
@@ -218,6 +244,29 @@ export default function AdminScreen() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  const [loadingStoreItems, setLoadingStoreItems] = useState(false);
+  const [storeWorking, setStoreWorking] = useState(false);
+  const [storeUploadingImage, setStoreUploadingImage] = useState(false);
+  const [storeEditingId, setStoreEditingId] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState("");
+  const [storeCategory, setStoreCategory] = useState("T-shirts");
+  const [storeDescription, setStoreDescription] = useState("");
+  const [storeSizes, setStoreSizes] = useState("");
+  const [storeColors, setStoreColors] = useState("");
+  const [storePrice, setStorePrice] = useState("");
+  const [storePurchaseCost, setStorePurchaseCost] = useState("");
+  const [storeOtherCost, setStoreOtherCost] = useState("");
+  const [storeStockQuantity, setStoreStockQuantity] = useState("");
+  const [campusDeliveryFee, setCampusDeliveryFee] = useState("0");
+  const [sisterDeliveryFee, setSisterDeliveryFee] = useState("0");
+  const [courierDeliveryFee, setCourierDeliveryFee] = useState("");
+  const [otherDeliveryFee, setOtherDeliveryFee] = useState("");
+  const [freeDeliveryAreas, setFreeDeliveryAreas] = useState("");
+  const [savingDeliveryFees, setSavingDeliveryFees] = useState(false);
+  const [storeImagePaths, setStoreImagePaths] = useState<string[]>([]);
+  const [storeAvailable, setStoreAvailable] = useState(true);
+  const [storePublished, setStorePublished] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [orderSearch, setOrderSearch] = useState("");
@@ -237,6 +286,12 @@ export default function AdminScreen() {
   const [quoteDiscount, setQuoteDiscount] = useState("");
   const [quoteDeliveryFee, setQuoteDeliveryFee] = useState("");
   const [quoteRushDays, setQuoteRushDays] = useState("");
+  const [costOrderId, setCostOrderId] = useState<string | null>(null);
+  const [actualSourcingCost, setActualSourcingCost] = useState("");
+  const [actualPrintingCost, setActualPrintingCost] = useState("");
+  const [actualDeliveryCost, setActualDeliveryCost] = useState("");
+  const [actualPaymentFee, setActualPaymentFee] = useState("");
+  const [actualOtherCost, setActualOtherCost] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -302,6 +357,57 @@ export default function AdminScreen() {
     setLoadingProducts(false);
   }
 
+  async function loadStoreItems() {
+    setLoadingStoreItems(true);
+    const [
+      { data: itemData, error: itemError },
+      { data: costData, error: costError },
+    ] = await Promise.all([
+      supabase
+        .from("store_items")
+        .select("id, name, category, description, price, currency_code, image_paths, size_options, color_options, is_available, stock_quantity, is_published")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("store_item_costs")
+        .select("store_item_id, purchase_cost, other_cost"),
+    ]);
+
+    const loadError = itemError ?? costError;
+    if (loadError) {
+      setError(loadError.message);
+      setLoadingStoreItems(false);
+      return;
+    }
+
+    const costsByItem = new Map<string, { purchase_cost: number | string | null; other_cost: number | string | null }>(
+      (costData ?? []).map((row) => [row.store_item_id, row] as const),
+    );
+    setStoreItems(((itemData ?? []) as StoreItemRow[]).map((item) => ({
+      ...item,
+      purchase_cost: costsByItem.get(item.id)?.purchase_cost ?? null,
+      other_cost: costsByItem.get(item.id)?.other_cost ?? null,
+    })));
+    setLoadingStoreItems(false);
+  }
+
+  async function loadStoreDeliverySettings() {
+    const { data, error: settingsError } = await supabase
+      .from("store_delivery_settings")
+      .select("campus_handoff_fee, sister_office_handoff_fee, courier_fee, other_fee, free_delivery_areas")
+      .eq("singleton", true)
+      .maybeSingle();
+    if (settingsError) {
+      setError(settingsError.message);
+      return;
+    }
+    if (!data) return;
+    setCampusDeliveryFee(String(data.campus_handoff_fee));
+    setSisterDeliveryFee(String(data.sister_office_handoff_fee));
+    setCourierDeliveryFee(data.courier_fee === null ? "" : String(data.courier_fee));
+    setOtherDeliveryFee(data.other_fee === null ? "" : String(data.other_fee));
+    setFreeDeliveryAreas((data.free_delivery_areas ?? []).join(", "));
+  }
+
   async function loadOrders() {
     setLoadingOrders(true);
 
@@ -313,7 +419,7 @@ export default function AdminScreen() {
       supabase
         .from("orders")
         .select(
-          "id, order_code, order_type, status, payment_status, availability_confirmed_at, customer_name, customer_phone, customer_email, delivery_method, delivery_area, delivery_address, delivery_instructions, customer_request, customer_artwork_path, estimated_delivery_date, currency_code, subtotal, discount_amount, delivery_fee, rush_days_early, rush_fee, total_amount, amount_paid, amount_refunded, actual_sourcing_cost, actual_printing_cost, actual_delivery_cost, actual_payment_fee, actual_other_cost, admin_notes, created_at",
+          "id, order_code, order_type, status, payment_status, availability_confirmed_at, customer_name, customer_phone, customer_email, delivery_method, delivery_area, delivery_address, delivery_instructions, customer_request, customer_artwork_path, estimated_delivery_date, currency_code, subtotal, discount_amount, delivery_fee, rush_days_early, rush_fee, total_amount, amount_paid, amount_refunded, actual_sourcing_cost, actual_printing_cost, actual_delivery_cost, actual_payment_fee, actual_other_cost, actual_costs_recorded_at, admin_notes, created_at",
         )
         .order("created_at", { ascending: false }),
       supabase
@@ -380,6 +486,8 @@ export default function AdminScreen() {
       if (user?.id === ADMIN_USER_ID) {
         setAdminEmail(user.email ?? "WearWise owner");
         void loadProducts();
+        void loadStoreItems();
+        void loadStoreDeliverySettings();
         void loadOrders();
       } else if (user) {
         void supabase.auth.signOut();
@@ -582,6 +690,207 @@ export default function AdminScreen() {
     await loadProducts();
   }
 
+  function clearStoreForm() {
+    setStoreEditingId(null);
+    setStoreName("");
+    setStoreCategory("T-shirts");
+    setStoreDescription("");
+    setStoreSizes("");
+    setStoreColors("");
+    setStorePrice("");
+    setStorePurchaseCost("");
+    setStoreOtherCost("");
+    setStoreStockQuantity("");
+    setStoreImagePaths([]);
+    setStoreAvailable(true);
+    setStorePublished(false);
+  }
+
+  function editStoreItem(item: StoreItem) {
+    setStoreEditingId(item.id);
+    setStoreName(item.name);
+    setStoreCategory(item.category);
+    setStoreDescription(item.description);
+    setStoreSizes((item.size_options ?? []).join(", "));
+    setStoreColors((item.color_options ?? []).join(", "));
+    setStorePrice(String(item.price));
+    setStorePurchaseCost(item.purchase_cost === null ? "" : String(item.purchase_cost));
+    setStoreOtherCost(item.other_cost === null ? "" : String(item.other_cost));
+    setStoreStockQuantity(item.stock_quantity === null ? "" : String(item.stock_quantity));
+    setStoreImagePaths(item.image_paths ?? []);
+    setStoreAvailable(item.is_available);
+    setStorePublished(item.is_published);
+    setError(null);
+    setMessage(null);
+  }
+
+  function chooseStoreImage() {
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      setError("Please open the admin page on the WearWise website to upload product photos.");
+      return;
+    }
+    if (storeImagePaths.length >= 5) {
+      setError("Each item can have up to five photos.");
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        setError("Choose a JPG, PNG, or WebP photo.");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Each photo must be 5 MB or smaller.");
+        return;
+      }
+
+      void (async () => {
+        setStoreUploadingImage(true);
+        setError(null);
+        const extension = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
+        const objectPath = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}.${extension}`;
+        const { data, error: uploadError } = await supabase.storage
+          .from("store-items")
+          .upload(objectPath, file, {
+            cacheControl: "3600",
+            contentType: file.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setError(uploadError.message);
+        } else {
+          setStoreImagePaths((paths) => [...paths, data.path]);
+          setMessage("Photo uploaded. Save the item to add it to the shop.");
+        }
+        setStoreUploadingImage(false);
+      })();
+    };
+    input.click();
+  }
+
+  async function saveStoreItem() {
+    const price = Number(storePrice);
+    const purchaseCost = numberOrNull(storePurchaseCost);
+    const otherCost = numberOrNull(storeOtherCost);
+    const stockQuantity = storeStockQuantity.trim() ? Number(storeStockQuantity) : null;
+    setError(null);
+    setMessage(null);
+
+    if (!storeName.trim() || !storeCategory.trim()) {
+      setError("Enter an item name and category.");
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      setError("Enter a customer price greater than zero.");
+      return;
+    }
+    if ([purchaseCost, otherCost].some((value) => value !== null && (!Number.isFinite(value) || value < 0))) {
+      setError("Cost amounts must be zero or higher.");
+      return;
+    }
+    if (stockQuantity !== null && (!Number.isInteger(stockQuantity) || stockQuantity < 0)) {
+      setError("Stock quantity must be a whole number or left blank if you are not tracking a count.");
+      return;
+    }
+
+    setStoreWorking(true);
+    const values = {
+      name: storeName.trim(),
+      category: storeCategory.trim(),
+      description: storeDescription.trim(),
+      size_options: splitList(storeSizes),
+      color_options: splitList(storeColors),
+      price,
+      currency_code: "GHS",
+      image_paths: storeImagePaths,
+      is_available: storeAvailable,
+      stock_quantity: stockQuantity,
+      is_published: storePublished,
+      updated_at: new Date().toISOString(),
+    };
+
+    const saveResult = storeEditingId
+      ? await supabase.from("store_items").update(values).eq("id", storeEditingId).select("id").single()
+      : await supabase.from("store_items").insert(values).select("id").single();
+
+    if (saveResult.error || !saveResult.data) {
+      setError(saveResult.error?.message ?? "Could not save this shop item.");
+      setStoreWorking(false);
+      return;
+    }
+
+    const { error: costError } = await supabase.from("store_item_costs").upsert(
+      {
+        store_item_id: saveResult.data.id,
+        purchase_cost: purchaseCost,
+        other_cost: otherCost,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "store_item_id" },
+    );
+
+    if (costError) {
+      setError(`Item saved, but private costs were not saved: ${costError.message}`);
+      await loadStoreItems();
+      setStoreWorking(false);
+      return;
+    }
+
+    const wasEditing = Boolean(storeEditingId);
+    clearStoreForm();
+    setMessage(wasEditing ? "Shop item updated." : "Shop item added.");
+    await loadStoreItems();
+    setStoreWorking(false);
+  }
+
+  async function toggleStoreItem(item: StoreItem, field: "is_available" | "is_published") {
+    setError(null);
+    setMessage(null);
+    const { error: updateError } = await supabase
+      .from("store_items")
+      .update({ [field]: !item[field], updated_at: new Date().toISOString() })
+      .eq("id", item.id);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setMessage(field === "is_available"
+      ? item.is_available ? "Item marked unavailable." : "Item marked available."
+      : item.is_published ? "Item hidden from the shop." : "Item published in the shop.");
+    await loadStoreItems();
+  }
+
+  async function saveStoreDeliverySettings() {
+    const fixedFees = [campusDeliveryFee, sisterDeliveryFee, courierDeliveryFee, otherDeliveryFee];
+    if (fixedFees.some((value) => value.trim() && (!Number.isFinite(Number(value)) || Number(value) < 0))) {
+      setError("Enter valid delivery fees in GHS, or leave an unavailable method blank.");
+      return;
+    }
+    setSavingDeliveryFees(true);
+    setError(null);
+    setMessage(null);
+    const { error: saveError } = await supabase
+      .from("store_delivery_settings")
+      .update({
+        campus_handoff_fee: Number(campusDeliveryFee || 0),
+        sister_office_handoff_fee: Number(sisterDeliveryFee || 0),
+        courier_fee: numberOrNull(courierDeliveryFee),
+        other_fee: numberOrNull(otherDeliveryFee),
+        free_delivery_areas: splitList(freeDeliveryAreas),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("singleton", true);
+    if (saveError) setError(saveError.message);
+    else setMessage("Shop delivery fees updated.");
+    setSavingDeliveryFees(false);
+  }
+
   async function signIn() {
     setWorking(true);
     setError(null);
@@ -615,7 +924,7 @@ export default function AdminScreen() {
       useNativeDriver: true,
     }).start();
     setPassword("");
-    await Promise.all([loadProducts(), loadOrders()]);
+    await Promise.all([loadProducts(), loadStoreItems(), loadStoreDeliverySettings(), loadOrders()]);
     setWorking(false);
   }
 
@@ -643,6 +952,46 @@ export default function AdminScreen() {
     setAvailabilityConfirmed(Boolean(order.availability_confirmed_at));
     setError(null);
     setMessage(null);
+  }
+
+  function openActualCostForm(order: Order) {
+    setCostOrderId(order.id);
+    setActualSourcingCost(order.actual_costs_recorded_at ? String(order.actual_sourcing_cost) : "");
+    setActualPrintingCost(order.actual_costs_recorded_at ? String(order.actual_printing_cost) : "");
+    setActualDeliveryCost(order.actual_costs_recorded_at ? String(order.actual_delivery_cost) : "");
+    setActualPaymentFee(order.actual_costs_recorded_at ? String(order.actual_payment_fee) : "");
+    setActualOtherCost(order.actual_costs_recorded_at ? String(order.actual_other_cost) : "");
+    setError(null);
+    setMessage(null);
+  }
+
+  async function saveActualCosts(order: Order) {
+    const values = [actualSourcingCost, actualPrintingCost, actualDeliveryCost, actualPaymentFee, actualOtherCost];
+    if (values.some((value) => !value.trim() || !Number.isFinite(Number(value)) || Number(value) < 0)) {
+      setError("Enter each actual cost, using 0 for any cost that did not apply.");
+      return;
+    }
+    setUpdatingOrderId(order.id);
+    setError(null);
+    setMessage(null);
+    const { error: updateError } = await supabase.from("orders").update({
+      actual_sourcing_cost: Number(actualSourcingCost),
+      actual_printing_cost: Number(actualPrintingCost),
+      actual_delivery_cost: Number(actualDeliveryCost),
+      actual_payment_fee: Number(actualPaymentFee),
+      actual_other_cost: Number(actualOtherCost),
+      actual_costs_recorded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", order.id);
+    if (updateError) {
+      setError(updateError.message);
+      setUpdatingOrderId(null);
+      return;
+    }
+    setCostOrderId(null);
+    setMessage(`Actual costs saved for ${order.order_code}.`);
+    await loadOrders();
+    setUpdatingOrderId(null);
   }
 
   async function saveQuote(order: Order) {
@@ -824,6 +1173,30 @@ export default function AdminScreen() {
     return matchesSearch && matchesFilter;
   });
 
+  const analytics = useMemo(() => {
+    const paidOrders = orders.filter((order) => Number(order.amount_paid) > 0);
+    const collectedAfterRefunds = paidOrders.reduce(
+      (sum, order) => sum + Math.max(0, Number(order.amount_paid) - Number(order.amount_refunded)),
+      0,
+    );
+    const ordersWithCosts = paidOrders.filter((order) => order.actual_costs_recorded_at !== null);
+    const knownRevenue = ordersWithCosts.reduce(
+      (sum, order) => sum + Math.max(0, Number(order.amount_paid) - Number(order.amount_refunded)),
+      0,
+    );
+    const knownCosts = ordersWithCosts.reduce((sum, order) => sum +
+      Number(order.actual_sourcing_cost) + Number(order.actual_printing_cost) +
+      Number(order.actual_delivery_cost) + Number(order.actual_payment_fee) +
+      Number(order.actual_other_cost), 0);
+    return {
+      paidOrders: paidOrders.length,
+      collectedAfterRefunds,
+      knownProfit: knownRevenue - knownCosts,
+      ordersWithCosts: ordersWithCosts.length,
+      awaitingPayment: orders.filter((order) => order.status === "awaiting_payment").length,
+    };
+  }, [orders]);
+
   async function signOut() {
     setWorking(true);
     setError(null);
@@ -836,6 +1209,7 @@ export default function AdminScreen() {
       pageMotion.setValue(0);
       setAdminEmail(null);
       setProducts([]);
+      setStoreItems([]);
       setOrders([]);
       clearForm();
       Animated.spring(pageMotion, {
@@ -894,7 +1268,7 @@ export default function AdminScreen() {
           </View>
 
           <View style={styles.loginAccent}>
-            <Text style={styles.loginAccentMark}>✳</Text>
+            <Text style={styles.loginAccentMark}>W</Text>
           </View>
           <Text style={styles.loginEyebrow}>GOOD TO SEE YOU</Text>
           <Text style={styles.loginHeading}>Sign in to your studio.</Text>
@@ -957,6 +1331,7 @@ export default function AdminScreen() {
       <Animated.View
         style={[
           styles.dashboard,
+          width >= 1024 && styles.dashboardWide,
           {
             opacity: pageMotion,
             transform: [
@@ -970,7 +1345,8 @@ export default function AdminScreen() {
           },
         ]}
       >
-      <View style={styles.header}>
+      <View style={[styles.adminShell, width >= 1024 && styles.adminShellWide]}>
+      <View style={[styles.adminSidebar, width >= 1024 && styles.adminSidebarWide, width < 1024 && styles.adminSidebarCompact]}>
         <View style={styles.dashboardBrand}>
           <Image
             source={require("../assets/images/logo.png")}
@@ -982,6 +1358,19 @@ export default function AdminScreen() {
             <Text style={styles.brandCaption}>OWNER WORKSPACE</Text>
           </View>
         </View>
+        <Text style={styles.sidebarLabel}>WORKSPACE</Text>
+        {([
+          ["overview", "Overview", "⌂"],
+          ["orders", "Orders & payments", "▤"],
+          ["shop", "Shop inventory", "▣"],
+          ["catalog", "Explore catalog", "◇"],
+        ] as [AdminSection, string, string][]).map(([key, label, icon]) => (
+          <Pressable key={key} onPress={() => setActiveSection(key)} style={[styles.sidebarLink, activeSection === key && styles.sidebarLinkActive]}>
+            <Text style={[styles.sidebarIcon, activeSection === key && styles.sidebarIconActive]}>{icon}</Text>
+            <Text style={[styles.sidebarLinkText, activeSection === key && styles.sidebarLinkTextActive]}>{label}</Text>
+          </Pressable>
+        ))}
+        <View style={styles.sidebarSpacer} />
         <Pressable
           onPress={signOut}
           disabled={working}
@@ -991,15 +1380,165 @@ export default function AdminScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.dashboardIntro}>
-        <View style={styles.dashboardIntroCopy}>
-          <Text style={styles.loginEyebrow}>YOUR BUSINESS, AT A GLANCE</Text>
-          <Text style={styles.dashboardTitle}>Let’s make something good.</Text>
-          <Text style={styles.dashboardSubtitle}>Signed in as {adminEmail}</Text>
+      <View style={styles.adminMain}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerKicker}>WEARWISE ADMIN</Text>
+          <Text style={styles.headerTitle}>{({ overview: "Overview", orders: "Orders & payments", shop: "Shop inventory", catalog: "Explore catalog" })[activeSection]}</Text>
         </View>
-        <View style={styles.dashboardSparkle}><Text style={styles.dashboardSparkleText}>✳</Text></View>
+        <Text style={styles.headerAccount}>{adminEmail}</Text>
       </View>
 
+      {activeSection === "overview" ? <>
+      <View style={styles.dashboardIntro}>
+        <View style={styles.dashboardIntroCopy}>
+          <Text style={styles.loginEyebrow}>BUSINESS SUMMARY</Text>
+          <Text style={styles.dashboardTitle}>Good to see you.</Text>
+          <Text style={styles.dashboardSubtitle}>Here’s how WearWise is doing today.</Text>
+        </View>
+        <View style={styles.dashboardSparkle}><Text style={styles.dashboardSparkleText}>W</Text></View>
+      </View>
+
+      <View style={styles.metricsGrid}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Collected after refunds</Text>
+          <Text style={styles.metricValue}>{formatMoney(analytics.collectedAfterRefunds)}</Text>
+          <Text style={styles.metricNote}>{analytics.paidOrders} order(s) with payment</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Known net profit</Text>
+          <Text style={styles.metricValue}>{analytics.ordersWithCosts ? formatMoney(analytics.knownProfit) : "Add actual costs"}</Text>
+          <Text style={styles.metricNote}>Costs recorded for {analytics.ordersWithCosts} paid order(s)</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Orders</Text>
+          <Text style={styles.metricValue}>{orders.length}</Text>
+          <Text style={styles.metricNote}>Shop and design requests</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Awaiting payment</Text>
+          <Text style={styles.metricValue}>{analytics.awaitingPayment}</Text>
+          <Text style={styles.metricNote}>Orders needing follow-up</Text>
+        </View>
+      </View>
+      </> : null}
+
+      {activeSection === "shop" ? <>
+      <View style={styles.card}>
+        <View style={styles.cardHeadingRow}>
+          <View style={styles.cardHeadingIcon}><Text style={styles.cardHeadingIconText}>↗</Text></View>
+          <View style={styles.cardHeadingCopy}>
+            <Text style={styles.sectionEyebrow}>SHOP CHECKOUT</Text>
+            <Text style={styles.heading}>Delivery prices</Text>
+          </View>
+        </View>
+        <Text style={styles.helpText}>Set fixed delivery fees in GHS. Listed free areas override the courier fee when the customer enters a matching area.</Text>
+        <Field label="Campus handoff fee (GHS)" value={campusDeliveryFee} onChangeText={setCampusDeliveryFee} keyboardType="decimal-pad" />
+        <Field label="Sister’s office handoff fee (GHS)" value={sisterDeliveryFee} onChangeText={setSisterDeliveryFee} keyboardType="decimal-pad" />
+        <Field label="Courier fee (GHS)" value={courierDeliveryFee} onChangeText={setCourierDeliveryFee} placeholder="Set a fee to enable courier checkout" keyboardType="decimal-pad" />
+        <Field label="Other delivery fee (GHS)" value={otherDeliveryFee} onChangeText={setOtherDeliveryFee} placeholder="Optional" keyboardType="decimal-pad" />
+        <Field label="Free delivery areas" value={freeDeliveryAreas} onChangeText={setFreeDeliveryAreas} placeholder="Separate area names with commas" />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {message ? <Text style={styles.success}>{message}</Text> : null}
+        <Pressable onPress={() => void saveStoreDeliverySettings()} disabled={savingDeliveryFees} style={[styles.primaryButton, savingDeliveryFees && styles.disabledButton]}>
+          <Text style={styles.primaryButtonText}>{savingDeliveryFees ? "Saving…" : "Save delivery prices"}</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.cardHeadingRow}>
+          <View style={styles.cardHeadingIcon}><Text style={styles.cardHeadingIconText}>▣</Text></View>
+          <View style={styles.cardHeadingCopy}>
+            <Text style={styles.sectionEyebrow}>{storeEditingId ? "UPDATE THE SHOP" : "READY TO BUY"}</Text>
+            <Text style={styles.heading}>{storeEditingId ? "Edit shop item" : "Add a shop item"}</Text>
+          </View>
+          <View style={styles.formStep}><Text style={styles.formStepText}>SHOP</Text></View>
+        </View>
+        <Text style={styles.helpText}>
+          These items appear in the separate Shop. Add only things you have confirmed are currently available.
+        </Text>
+        <Field label="Item name" value={storeName} onChangeText={setStoreName} placeholder="For example: Classic white tee" />
+        <Field label="Category" value={storeCategory} onChangeText={setStoreCategory} placeholder="T-shirts, Jerseys, Shoes…" />
+        <Field label="Description" value={storeDescription} onChangeText={setStoreDescription} placeholder="Material, fit, colour, or other details" multiline />
+        <Field label="Available sizes (optional)" value={storeSizes} onChangeText={setStoreSizes} placeholder="Example: S, M, L, XL" />
+        <Field label="Available colours (optional)" value={storeColors} onChangeText={setStoreColors} placeholder="Example: Black, white, navy" />
+        <Field label="Customer price (GHS)" value={storePrice} onChangeText={setStorePrice} placeholder="For example: 180" keyboardType="decimal-pad" />
+        <Field label="Stock count (optional)" value={storeStockQuantity} onChangeText={setStoreStockQuantity} placeholder="Leave blank if you are not tracking a count" keyboardType="number-pad" />
+
+        <View style={styles.privateCostHeader}>
+          <Text style={styles.privateHeading}>Your item costs</Text>
+          <View style={styles.privatePill}><Text style={styles.privatePillText}>PRIVATE</Text></View>
+        </View>
+        <Text style={styles.helpText}>Only you can see these numbers. We’ll use them for sales and profit reporting later.</Text>
+        <Field label="Purchase cost (GHS)" value={storePurchaseCost} onChangeText={setStorePurchaseCost} placeholder="Optional" keyboardType="decimal-pad" />
+        <Field label="Other cost (GHS)" value={storeOtherCost} onChangeText={setStoreOtherCost} placeholder="Optional" keyboardType="decimal-pad" />
+
+        <Text style={styles.label}>Product photos</Text>
+        <Text style={styles.helpText}>JPG, PNG, or WebP · up to 5 MB each · maximum 5 photos</Text>
+        <Pressable onPress={chooseStoreImage} disabled={storeUploadingImage || storeImagePaths.length >= 5} style={styles.smallButton}>
+          <Text style={styles.smallButtonText}>{storeUploadingImage ? "Uploading photo…" : "Choose and upload photo"}</Text>
+        </Pressable>
+        {storeImagePaths.length > 0 ? (
+          <View style={styles.storePhotoRow}>
+            {storeImagePaths.map((path) => (
+              <View key={path} style={styles.storePhotoTile}>
+                <Image source={{ uri: supabase.storage.from("store-items").getPublicUrl(path).data.publicUrl }} style={styles.storePhoto} />
+                <Pressable onPress={() => setStoreImagePaths((paths) => paths.filter((itemPath) => itemPath !== path))} style={styles.storePhotoRemove}>
+                  <Text style={styles.storePhotoRemoveText}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Pressable onPress={() => setStoreAvailable((value) => !value)} style={styles.activeRow}>
+          <View style={[styles.checkbox, storeAvailable && styles.checkboxChecked]}>{storeAvailable ? <Text style={styles.checkmark}>✓</Text> : null}</View>
+          <Text style={styles.bodyText}>Available to order right now</Text>
+        </Pressable>
+        <Pressable onPress={() => setStorePublished((value) => !value)} style={styles.activeRow}>
+          <View style={[styles.checkbox, storePublished && styles.checkboxChecked]}>{storePublished ? <Text style={styles.checkmark}>✓</Text> : null}</View>
+          <Text style={styles.bodyText}>Show this item in the public Shop</Text>
+        </Pressable>
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {message ? <Text style={styles.success}>{message}</Text> : null}
+        <Pressable onPress={() => void saveStoreItem()} disabled={storeWorking || storeUploadingImage} style={[styles.primaryButton, (storeWorking || storeUploadingImage) && styles.disabledButton]}>
+          <Text style={styles.primaryButtonText}>{storeWorking ? "Saving…" : storeEditingId ? "Save shop item" : "Add to shop"}</Text>
+        </Pressable>
+        {storeEditingId ? <Pressable onPress={clearStoreForm} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel editing</Text></Pressable> : null}
+
+        <View style={styles.storeInventoryHeading}>
+          <Text style={styles.privateHeading}>Shop inventory</Text>
+          <View style={styles.countPill}><Text style={styles.countPillText}>{storeItems.length}</Text></View>
+        </View>
+        {loadingStoreItems ? <ActivityIndicator color={palette.plum} /> : storeItems.length === 0 ? (
+          <Text style={styles.helpText}>No shop items yet. Add your first ready-to-buy item above.</Text>
+        ) : storeItems.map((item) => (
+          <View key={item.id} style={styles.productCard}>
+            <View style={styles.productTopRow}>
+              {item.image_paths[0] ? <Image source={{ uri: supabase.storage.from("store-items").getPublicUrl(item.image_paths[0]).data.publicUrl }} style={styles.storeListImage} /> : null}
+              <View style={styles.productInfo}>
+                <Text style={styles.productName}>{item.name}</Text>
+                <View style={styles.categoryPill}><Text style={styles.categoryPillText}>{item.category}</Text></View>
+              </View>
+              <Text style={[styles.status, item.is_published && item.is_available ? styles.activeStatus : styles.hiddenStatus]}>
+                {item.is_published && item.is_available ? "In shop" : "Hidden"}
+              </Text>
+            </View>
+            <Text style={styles.bodyText}>{formatMoney(item.price)} · Known costs: {item.purchase_cost !== null && item.other_cost !== null ? formatMoney(Number(item.purchase_cost) + Number(item.other_cost)) : "not fully recorded"}</Text>
+            <Text style={styles.helpText}>{item.stock_quantity === null ? "Stock count not tracked" : `${item.stock_quantity} in stock`} · {item.is_available ? "Available" : "Unavailable"}</Text>
+            {(item.size_options.length > 0 || item.color_options.length > 0) ? <Text style={styles.helpText}>Sizes: {item.size_options.join(", ") || "Not applicable"} · Colours: {item.color_options.join(", ") || "Not applicable"}</Text> : null}
+            <View style={styles.productActions}>
+              <Pressable onPress={() => editStoreItem(item)} style={styles.smallButton}><Text style={styles.smallButtonText}>Edit</Text></Pressable>
+              <Pressable onPress={() => void toggleStoreItem(item, "is_available")} style={styles.smallButton}><Text style={styles.smallButtonText}>{item.is_available ? "Mark unavailable" : "Mark available"}</Text></Pressable>
+              <Pressable onPress={() => void toggleStoreItem(item, "is_published")} style={styles.smallButton}><Text style={styles.smallButtonText}>{item.is_published ? "Hide" : "Publish"}</Text></Pressable>
+            </View>
+          </View>
+        ))}
+      </View>
+      </> : null}
+
+      {activeSection === "orders" ? <>
       <View style={styles.card}>
         <View style={styles.cardHeadingRow}>
           <View style={styles.cardHeadingIcon}><Text style={styles.cardHeadingIconText}>↗</Text></View>
@@ -1047,15 +1586,18 @@ export default function AdminScreen() {
             <Text style={styles.productName}>{orders.length === 0 ? "No orders yet" : "No orders match this view"}</Text>
             <Text style={styles.helpText}>
               {orders.length === 0
-                ? "Customer requests will show up here when the order form is connected."
+                ? "Shop orders and design requests will appear here."
                 : "Try another filter or search for a different customer."}
             </Text>
           </View>
         ) : (
           <View style={styles.orderList}>
             {visibleOrders.map((order) => {
-              const next = nextStatuses[order.status] ?? [];
+              const next = order.order_type === "store_purchase" && order.status === "paid"
+                ? ["ready_for_handoff", "alternative_offered", "refund_pending"] as OrderStatus[]
+                : nextStatuses[order.status] ?? [];
               const isTransactionOpen = transactionOrderId === order.id;
+              const isCostFormOpen = costOrderId === order.id;
               const remainingToPay = Math.max(0, Number(order.total_amount) - Number(order.amount_paid));
               const remainingToRefund = Math.max(0, Number(order.amount_paid) - Number(order.amount_refunded));
 
@@ -1126,10 +1668,17 @@ export default function AdminScreen() {
 
                   <View style={styles.orderInfoBlock}>
                     <Text style={styles.orderSectionLabel}>PAYMENT SUMMARY · {order.payment_status.replace(/_/g, " ").toUpperCase()}</Text>
+                    {order.order_type === "store_purchase" && order.status === "awaiting_payment" ? <Text style={styles.helpText}>Stock is held for this order. If the customer will not pay, cancel the order to return counted stock to the Shop.</Text> : null}
                     <View style={styles.moneyLine}><Text style={styles.helpText}>Order total</Text><Text style={styles.moneyValue}>{formatMoney(order.total_amount)}</Text></View>
                     <View style={styles.moneyLine}><Text style={styles.helpText}>Paid</Text><Text style={styles.moneyValue}>{formatMoney(order.amount_paid)}</Text></View>
                     {Number(order.amount_refunded) > 0 ? (
                       <View style={styles.moneyLine}><Text style={styles.helpText}>Refunded</Text><Text style={styles.moneyValue}>{formatMoney(order.amount_refunded)}</Text></View>
+                    ) : null}
+                    {order.actual_costs_recorded_at ? (
+                      <View style={styles.moneyLine}>
+                        <Text style={styles.helpText}>Recorded costs</Text>
+                        <Text style={styles.moneyValue}>{formatMoney(Number(order.actual_sourcing_cost) + Number(order.actual_printing_cost) + Number(order.actual_delivery_cost) + Number(order.actual_payment_fee) + Number(order.actual_other_cost))}</Text>
+                      </View>
                     ) : null}
                     {remainingToPay > 0 ? (
                       <View style={styles.moneyLine}><Text style={styles.helpText}>Balance due</Text><Text style={styles.moneyDue}>{formatMoney(remainingToPay)}</Text></View>
@@ -1158,6 +1707,7 @@ export default function AdminScreen() {
                       {order.delivery_area ? ` · ${order.delivery_area}` : ""}
                     </Text>
                     {order.delivery_address ? <Text style={styles.helpText}>{order.delivery_address}</Text> : null}
+                    {order.delivery_instructions ? <Text style={styles.helpText}>Instructions: {order.delivery_instructions}</Text> : null}
                     {order.rush_days_early > 0 ? (
                       <Text style={styles.rushNote}>Urgent · {order.rush_days_early} day(s) earlier · {formatMoney(order.rush_fee)} fee</Text>
                     ) : null}
@@ -1179,7 +1729,7 @@ export default function AdminScreen() {
                   ) : null}
 
                   <View style={styles.orderActions}>
-                    {Number(order.amount_paid) === 0 && ["request_received", "awaiting_payment"].includes(order.status) ? (
+                    {order.order_type !== "store_purchase" && Number(order.amount_paid) === 0 && ["request_received", "awaiting_payment"].includes(order.status) ? (
                       <Pressable
                         onPress={() => openQuoteForm(order)}
                         style={styles.orderActionButton}
@@ -1189,12 +1739,17 @@ export default function AdminScreen() {
                         </Text>
                       </Pressable>
                     ) : null}
-                    {remainingToPay > 0 && ["request_received", "awaiting_payment"].includes(order.status) ? (
+                    {order.order_type !== "store_purchase" && remainingToPay > 0 && ["request_received", "awaiting_payment"].includes(order.status) ? (
                       <Pressable
                         onPress={() => openTransactionForm(order, "payment")}
                         style={styles.orderActionButton}
                       >
                         <Text style={styles.orderActionText}>Record payment</Text>
+                      </Pressable>
+                    ) : null}
+                    {order.payment_status === "paid" ? (
+                      <Pressable onPress={() => isCostFormOpen ? setCostOrderId(null) : openActualCostForm(order)} style={styles.orderActionButton}>
+                        <Text style={styles.orderActionText}>{isCostFormOpen ? "Hide actual costs" : order.actual_costs_recorded_at ? "Edit actual costs" : "Record actual costs"}</Text>
                       </Pressable>
                     ) : null}
                     {order.status === "awaiting_payment" && remainingToPay > 0 ? (
@@ -1332,13 +1887,32 @@ export default function AdminScreen() {
                       </View>
                     </View>
                   ) : null}
+                  {isCostFormOpen ? (
+                    <View style={styles.transactionForm}>
+                      <Text style={styles.transactionTitle}>Record actual costs</Text>
+                      <Text style={styles.helpText}>Use 0 for costs that did not apply. Known profit is calculated only after all five amounts are saved.</Text>
+                      <Field label="Sourcing / item cost (GHS)" value={actualSourcingCost} onChangeText={setActualSourcingCost} keyboardType="decimal-pad" />
+                      <Field label="Printing cost (GHS)" value={actualPrintingCost} onChangeText={setActualPrintingCost} keyboardType="decimal-pad" />
+                      <Field label="Delivery cost (GHS)" value={actualDeliveryCost} onChangeText={setActualDeliveryCost} keyboardType="decimal-pad" />
+                      <Field label="Payment fee (GHS)" value={actualPaymentFee} onChangeText={setActualPaymentFee} keyboardType="decimal-pad" />
+                      <Field label="Other cost (GHS)" value={actualOtherCost} onChangeText={setActualOtherCost} keyboardType="decimal-pad" />
+                      <View style={styles.productActions}>
+                        <Pressable onPress={() => void saveActualCosts(order)} disabled={updatingOrderId === order.id} style={styles.orderActionButton}>
+                          <Text style={styles.orderActionText}>{updatingOrderId === order.id ? "Saving…" : "Save actual costs"}</Text>
+                        </Pressable>
+                        <Pressable onPress={() => setCostOrderId(null)} style={styles.smallButton}><Text style={styles.smallButtonText}>Cancel</Text></Pressable>
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               );
             })}
           </View>
         )}
       </View>
+      </> : null}
 
+      {activeSection === "catalog" ? <>
       <View style={styles.card}>
         <View style={styles.cardHeadingRow}>
           <View style={styles.cardHeadingIcon}><Text style={styles.cardHeadingIconText}>{editingId ? "↗" : "+"}</Text></View>
@@ -1566,47 +2140,50 @@ export default function AdminScreen() {
           ))
         )}
       </View>
+      </> : null}
       <Text style={styles.dashboardFooter}>WEARWISE · MADE FOR YOUR EVERYDAY</Text>
+      </View>
+      </View>
       </Animated.View>
     </ScrollView>
   );
 }
 
 const palette = {
-  paper: "#FAF8F3",
-  ink: "#25262B",
-  muted: "#77777C",
-  plum: "#6250B5",
-  violet: "#E8E2FF",
-  line: "#E8E4DC",
+  paper: "#F5F6F8",
+  ink: "#17191D",
+  muted: "#737780",
+  plum: "#D65B3E",
+  violet: "#F4E9E5",
+  line: "#E4E6E9",
   white: "#FFFFFF",
   green: "#4D7554",
-  softGreen: "#E8EFE6",
+  softGreen: "#E8F2EB",
   red: "#B74A43",
 };
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: palette.paper },
-  pageContent: { width: "100%", maxWidth: 980, alignSelf: "center", paddingHorizontal: 22, paddingTop: 18, paddingBottom: 42, gap: 16 },
+  pageContent: { width: "100%", maxWidth: 1480, alignSelf: "center", paddingHorizontal: 22, paddingTop: 18, paddingBottom: 42 },
   centeredPage: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 20, backgroundColor: palette.paper },
   loadingText: { color: palette.muted, fontSize: 13 },
   loginPage: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 22, backgroundColor: palette.paper },
-  loginCard: { width: "100%", maxWidth: 470, padding: 32, borderRadius: 26, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, shadowColor: "#39304D", shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 4 },
+  loginCard: { width: "100%", maxWidth: 470, padding: 34, borderRadius: 8, backgroundColor: palette.white, borderWidth: 1, borderColor: palette.line, shadowColor: "#17191D", shadowOpacity: 0.04, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
   loginBrandRow: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 30 },
-  loginLogo: { width: 47, height: 47, borderRadius: 13, backgroundColor: palette.paper },
+  loginLogo: { width: 47, height: 47, borderRadius: 8, backgroundColor: palette.paper },
   brand: { color: palette.ink, fontSize: 20, fontWeight: "800", letterSpacing: -0.6 },
   brandCaption: { marginTop: 2, color: palette.muted, fontSize: 8, fontWeight: "800", letterSpacing: 1.7 },
-  loginAccent: { width: 50, height: 50, alignItems: "center", justifyContent: "center", marginBottom: 19, borderRadius: 16, backgroundColor: palette.violet, transform: [{ rotate: "-7deg" }] },
-  loginAccentMark: { color: palette.plum, fontSize: 28 },
+  loginAccent: { width: 46, height: 46, alignItems: "center", justifyContent: "center", marginBottom: 19, borderRadius: 8, backgroundColor: palette.violet },
+  loginAccentMark: { color: palette.plum, fontSize: 23, fontWeight: "800" },
   loginEyebrow: { color: palette.plum, fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
-  loginHeading: { marginTop: 7, marginBottom: 5, color: palette.ink, fontSize: 25, fontWeight: "800", letterSpacing: -0.8 },
+  loginHeading: { marginTop: 7, marginBottom: 5, color: palette.ink, fontSize: 28, fontWeight: "800", letterSpacing: -1 },
   helpText: { color: palette.muted, fontSize: 13, lineHeight: 20 },
   loginForm: { gap: 13, marginTop: 23, marginBottom: 7 },
   field: { marginTop: 4 },
   label: { marginBottom: 7, color: palette.ink, fontSize: 12, fontWeight: "700" },
-  input: { minHeight: 48, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: palette.line, borderRadius: 11, color: palette.ink, backgroundColor: "#FDFCF9", fontSize: 15 },
+  input: { minHeight: 48, paddingHorizontal: 13, paddingVertical: 11, borderWidth: 1, borderColor: palette.line, borderRadius: 6, color: palette.ink, backgroundColor: "#FFFFFF", fontSize: 15 },
   multilineInput: { minHeight: 84, textAlignVertical: "top" },
-  primaryButton: { minHeight: 49, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 8, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, backgroundColor: palette.plum },
+  primaryButton: { minHeight: 49, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 8, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 5, backgroundColor: palette.ink },
   primaryButtonText: { color: palette.white, textAlign: "center", fontSize: 14, fontWeight: "700" },
   primaryButtonArrow: { color: palette.white, fontSize: 17, fontWeight: "700" },
   buttonPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
@@ -1617,21 +2194,44 @@ const styles = StyleSheet.create({
   loginFooter: { marginTop: 23, color: "#96938D", fontSize: 9, fontWeight: "700", textAlign: "center", letterSpacing: 1.4 },
   error: { marginTop: 9, color: palette.red, fontSize: 13, lineHeight: 19 },
   success: { color: palette.green, fontSize: 13, fontWeight: "600" },
-  dashboard: { width: "100%", gap: 16 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, paddingVertical: 8 },
+  dashboard: { width: "100%" },
+  dashboardWide: { minHeight: "100%" },
+  adminShell: { width: "100%", gap: 18 },
+  adminShellWide: { flexDirection: "row", alignItems: "stretch", gap: 24 },
+  adminSidebar: { width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, padding: 12, borderWidth: 1, borderColor: palette.line, borderRadius: 8, backgroundColor: palette.white },
+  adminSidebarWide: { width: 224, flexDirection: "column", flexWrap: "nowrap", alignItems: "stretch", alignSelf: "stretch", padding: 16 },
+  adminSidebarCompact: { justifyContent: "space-between" },
+  sidebarLabel: { width: "100%", marginTop: 12, marginBottom: 3, color: palette.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.3 },
+  sidebarLink: { minHeight: 40, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 5 },
+  sidebarLinkActive: { backgroundColor: palette.violet },
+  sidebarIcon: { width: 18, color: palette.muted, fontSize: 15, textAlign: "center" },
+  sidebarIconActive: { color: palette.plum },
+  sidebarLinkText: { color: "#53565D", fontSize: 11, fontWeight: "600" },
+  sidebarLinkTextActive: { color: palette.plum, fontWeight: "800" },
+  sidebarSpacer: { flex: 1 },
+  adminMain: { flex: 1, minWidth: 0, gap: 16 },
+  header: { minHeight: 58, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: palette.line },
+  headerKicker: { color: palette.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.4 },
+  headerTitle: { marginTop: 3, color: palette.ink, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
+  headerAccount: { maxWidth: "48%", color: palette.muted, fontSize: 10 },
   dashboardBrand: { flexDirection: "row", alignItems: "center", gap: 10 },
   dashboardLogo: { width: 42, height: 42, borderRadius: 12, backgroundColor: palette.white },
-  signOutButton: { paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 22, backgroundColor: palette.white },
-  signOutButtonText: { color: palette.ink, fontSize: 12, fontWeight: "700" },
-  dashboardIntro: { minHeight: 140, flexDirection: "row", alignItems: "center", justifyContent: "space-between", overflow: "hidden", padding: 24, borderRadius: 23, backgroundColor: palette.violet },
+  signOutButton: { paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 5, backgroundColor: palette.white },
+  signOutButtonText: { color: palette.ink, fontSize: 11, fontWeight: "700" },
+  dashboardIntro: { minHeight: 140, flexDirection: "row", alignItems: "center", justifyContent: "space-between", overflow: "hidden", padding: 28, borderRadius: 8, backgroundColor: "#202125" },
   dashboardIntroCopy: { flex: 1, gap: 6 },
-  dashboardTitle: { color: palette.ink, fontSize: 25, fontWeight: "800", letterSpacing: -0.8 },
-  dashboardSubtitle: { color: "#676474", fontSize: 12 },
-  dashboardSparkle: { width: 76, height: 76, alignItems: "center", justifyContent: "center", marginLeft: 14, borderRadius: 27, backgroundColor: "#F8B398", transform: [{ rotate: "9deg" }] },
-  dashboardSparkleText: { color: "#603F36", fontSize: 43 },
-  card: { width: "100%", padding: 22, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.white, gap: 10 },
+  dashboardTitle: { color: palette.white, fontSize: 29, fontWeight: "800", letterSpacing: -1 },
+  dashboardSubtitle: { color: "#C5C5C8", fontSize: 12 },
+  dashboardSparkle: { width: 76, height: 76, alignItems: "center", justifyContent: "center", marginLeft: 14, borderRadius: 8, backgroundColor: palette.plum },
+  dashboardSparkleText: { color: palette.white, fontSize: 33, fontWeight: "900" },
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metricCard: { flexGrow: 1, flexBasis: "22%", minWidth: 150, padding: 18, borderWidth: 1, borderColor: palette.line, borderRadius: 7, backgroundColor: palette.white, gap: 6 },
+  metricLabel: { color: palette.muted, fontSize: 10, fontWeight: "700" },
+  metricValue: { color: palette.ink, fontSize: 19, fontWeight: "900" },
+  metricNote: { color: palette.muted, fontSize: 9 },
+  card: { width: "100%", padding: 22, borderRadius: 7, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.white, gap: 10 },
   cardHeadingRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
-  cardHeadingIcon: { width: 39, height: 39, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: palette.violet },
+  cardHeadingIcon: { width: 39, height: 39, alignItems: "center", justifyContent: "center", borderRadius: 7, backgroundColor: palette.violet },
   cardHeadingIconText: { color: palette.plum, fontSize: 22, fontWeight: "700" },
   cardHeadingCopy: { flex: 1 },
   sectionEyebrow: { marginBottom: 3, color: palette.plum, fontSize: 8, fontWeight: "800", letterSpacing: 1.2 },
@@ -1640,11 +2240,18 @@ const styles = StyleSheet.create({
   heading: { marginTop: 4, marginBottom: 5, color: palette.ink, fontSize: 21, fontWeight: "800", letterSpacing: -0.5 },
   bodyText: { color: palette.ink, fontSize: 14, lineHeight: 21 },
   choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
-  choiceButton: { paddingVertical: 9, paddingHorizontal: 13, borderWidth: 1, borderColor: palette.line, borderRadius: 20, backgroundColor: palette.white },
+  choiceButton: { paddingVertical: 9, paddingHorizontal: 13, borderWidth: 1, borderColor: palette.line, borderRadius: 5, backgroundColor: palette.white },
   choiceButtonSelected: { borderColor: palette.plum, backgroundColor: palette.plum },
   choiceText: { color: palette.ink, fontSize: 12, fontWeight: "600" },
   choiceTextSelected: { color: palette.white, fontWeight: "700" },
   privateCostHeader: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 10 },
+  storeInventoryHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 24, paddingTop: 15, borderTopWidth: 1, borderTopColor: palette.line },
+  storePhotoRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 5 },
+  storePhotoTile: { width: 82, height: 82, position: "relative", overflow: "hidden", borderRadius: 12, backgroundColor: "#F0EDE6" },
+  storePhoto: { width: "100%", height: "100%" },
+  storePhotoRemove: { position: "absolute", top: 4, right: 4, width: 23, height: 23, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "rgba(37,38,43,0.82)" },
+  storePhotoRemoveText: { color: palette.white, fontSize: 19, lineHeight: 20, fontWeight: "700" },
+  storeListImage: { width: 56, height: 64, borderRadius: 9, backgroundColor: "#F0EDE6" },
   privateHeading: { color: palette.ink, fontSize: 15, fontWeight: "800" },
   privatePill: { paddingVertical: 4, paddingHorizontal: 7, borderRadius: 9, backgroundColor: palette.softGreen },
   privatePillText: { color: palette.green, fontSize: 8, fontWeight: "900", letterSpacing: 0.7 },
@@ -1654,17 +2261,17 @@ const styles = StyleSheet.create({
   checkmark: { color: palette.white, fontWeight: "800" },
   cancelButton: { padding: 12, alignItems: "center" },
   cancelButtonText: { color: palette.muted, fontSize: 13, fontWeight: "600" },
-  productCard: { marginTop: 4, padding: 16, borderWidth: 1, borderColor: palette.line, borderRadius: 15, backgroundColor: "#FDFCF9", gap: 8 },
+  productCard: { marginTop: 4, padding: 16, borderWidth: 1, borderColor: palette.line, borderRadius: 6, backgroundColor: "#FFFFFF", gap: 8 },
   productTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
   productInfo: { flex: 1, gap: 5 },
   productName: { color: palette.ink, fontSize: 16, fontWeight: "800" },
-  categoryPill: { alignSelf: "flex-start", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 10, backgroundColor: palette.violet },
+  categoryPill: { alignSelf: "flex-start", paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4, backgroundColor: palette.violet },
   categoryPillText: { color: palette.plum, fontSize: 9, fontWeight: "800" },
   status: { paddingVertical: 5, paddingHorizontal: 8, overflow: "hidden", borderRadius: 11, fontSize: 10, fontWeight: "800" },
   activeStatus: { color: palette.green, backgroundColor: palette.softGreen },
   hiddenStatus: { color: palette.muted, backgroundColor: "#EFEEEA" },
   productActions: { flexDirection: "row", gap: 8, marginTop: 4 },
-  smallButton: { paddingVertical: 9, paddingHorizontal: 12, borderRadius: 9, backgroundColor: palette.violet },
+  smallButton: { paddingVertical: 9, paddingHorizontal: 12, borderRadius: 4, backgroundColor: palette.violet },
   smallButtonText: { color: palette.plum, fontSize: 12, fontWeight: "700" },
   countPill: { minWidth: 28, height: 28, alignItems: "center", justifyContent: "center", paddingHorizontal: 7, borderRadius: 14, backgroundColor: palette.paper },
   countPillText: { color: palette.ink, fontSize: 11, fontWeight: "800" },
@@ -1673,7 +2280,7 @@ const styles = StyleSheet.create({
   ordersEmpty: { alignItems: "center", paddingHorizontal: 18, paddingVertical: 28, borderRadius: 15, backgroundColor: "#F7F4EE", gap: 6 },
   ordersEmptyIcon: { marginBottom: 3, color: palette.plum, fontSize: 27 },
   orderList: { gap: 13, marginTop: 2 },
-  orderCard: { padding: 16, borderWidth: 1, borderColor: palette.line, borderRadius: 16, backgroundColor: "#FDFCF9", gap: 13 },
+  orderCard: { padding: 16, borderWidth: 1, borderColor: palette.line, borderRadius: 6, backgroundColor: "#FFFFFF", gap: 13 },
   orderTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   orderCodeBlock: { gap: 4 },
   orderCode: { color: palette.ink, fontSize: 15, fontWeight: "900", letterSpacing: 0.3 },
