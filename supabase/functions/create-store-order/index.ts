@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -17,53 +18,82 @@ function cleanText(value: unknown, maxLength: number) {
 }
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (request.method !== "POST") return jsonResponse(405, { error: "Use POST to place a shop order." });
+  if (request.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
+  if (request.method !== "POST")
+    return jsonResponse(405, { error: "Use POST to place a shop order." });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) return jsonResponse(503, { error: "Shop checkout is temporarily unavailable." });
+  if (!supabaseUrl || !serviceRoleKey)
+    return jsonResponse(503, {
+      error: "Shop checkout is temporarily unavailable.",
+    });
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-real-ip") ??
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip)));
-  const ipHash = [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  const { data: allowed, error: rateLimitError } = await admin.rpc("check_guest_order_rate_limit", {
-    p_ip_hash: ipHash,
-  });
+  const ip =
+    request.headers.get("cf-connecting-ip") ??
+    request.headers.get("x-real-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown";
+  const digest = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip)),
+  );
+  const ipHash = [...digest]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const { data: allowed, error: rateLimitError } = await admin.rpc(
+    "check_guest_order_rate_limit",
+    {
+      p_ip_hash: ipHash,
+    },
+  );
   if (rateLimitError || !allowed) {
     return jsonResponse(rateLimitError ? 503 : 429, {
-      error: rateLimitError ? "Checkout is temporarily unavailable." : "Too many attempts. Please try again later.",
+      error: rateLimitError
+        ? "Checkout is temporarily unavailable."
+        : "Too many attempts. Please try again later.",
     });
   }
 
   const input = await request.json().catch(() => null);
-  if (!input || typeof input !== "object") return jsonResponse(400, { error: "Review the checkout details and try again." });
+  if (!input || typeof input !== "object")
+    return jsonResponse(400, {
+      error: "Review the checkout details and try again.",
+    });
 
   const itemId = cleanText(input.itemId, 50);
   const quantity = Number(input.quantity);
   const size = cleanText(input.size, 40);
   const color = cleanText(input.color, 60);
-  const customer = input.customer && typeof input.customer === "object" ? input.customer : {};
-  const delivery = input.delivery && typeof input.delivery === "object" ? input.delivery : {};
+  const customer =
+    input.customer && typeof input.customer === "object" ? input.customer : {};
+  const delivery =
+    input.delivery && typeof input.delivery === "object" ? input.delivery : {};
+  const discountCode = cleanText(input.discountCode, 40).toUpperCase();
   const customerName = cleanText(customer.name, 120);
   const customerPhone = cleanText(customer.phone, 40);
   const customerEmail = cleanText(customer.email, 160).toLowerCase();
   const deliveryMethod = cleanText(delivery.method, 40);
   const deliveryRegion = cleanText(delivery.region, 120);
 
-  if (!/^[0-9a-f-]{36}$/i.test(itemId)) return jsonResponse(400, { error: "That shop item could not be found." });
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) return jsonResponse(400, { error: "Choose a quantity between 1 and 20." });
+  if (!/^[0-9a-f-]{36}$/i.test(itemId))
+    return jsonResponse(400, { error: "That shop item could not be found." });
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20)
+    return jsonResponse(400, { error: "Choose a quantity between 1 and 20." });
   if (customerName.length < 2 || customerPhone.replace(/\D/g, "").length < 7) {
-    return jsonResponse(400, { error: "Enter your name and a valid phone number." });
+    return jsonResponse(400, {
+      error: "Enter your name and a valid phone number.",
+    });
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-    return jsonResponse(400, { error: "Enter a valid email address for your payment receipt." });
+    return jsonResponse(400, {
+      error: "Enter a valid email address for your payment receipt.",
+    });
   }
-  if (!["campus_handoff", "sister_office_handoff", "courier", "other"].includes(deliveryMethod)) {
+  if (!["courier", "other"].includes(deliveryMethod)) {
     return jsonResponse(400, { error: "Choose one of the delivery methods." });
   }
 
@@ -83,8 +113,79 @@ Deno.serve(async (request) => {
   });
 
   if (error || !data) {
-    const message = error?.message ?? "We could not place this order. Please try again.";
-    return jsonResponse(400, { error: message.replace(/^.*?ERROR:\s*/i, "").replace(/\s*CONTEXT:.*$/is, "") });
+    const message =
+      error?.message ?? "We could not place this order. Please try again.";
+    return jsonResponse(400, {
+      error: message
+        .replace(/^.*?ERROR:\s*/i, "")
+        .replace(/\s*CONTEXT:.*$/is, ""),
+    });
+  }
+
+  if (discountCode) {
+    const { data: discount, error: discountError } = await admin
+      .from("discounts")
+      .select(
+        "id,code,type,value,max_cap,start_date,end_date,total_limit,per_customer_limit,min_order_amount,applies_to,used_count",
+      )
+      .eq("code", discountCode)
+      .maybeSingle();
+    const now = new Date();
+    const subtotal = Number(data.subtotal ?? 0);
+    const valid =
+      discount &&
+      discount.status === "active" &&
+      ["shop", "both"].includes(discount.applies_to) &&
+      (!discount.start_date || new Date(discount.start_date) <= now) &&
+      (!discount.end_date || new Date(discount.end_date) >= now) &&
+      subtotal >= Number(discount.min_order_amount) &&
+      (discount.total_limit === null ||
+        discount.used_count < discount.total_limit);
+    if (discountError || !valid) {
+      return jsonResponse(400, {
+        error: "This discount code is not currently valid.",
+      });
+    }
+    if (discount.per_customer_limit) {
+      const { count, error: redemptionError } = await admin
+        .from("discount_redemptions")
+        .select("id", { count: "exact", head: true })
+        .eq("discount_id", discount.id)
+        .eq("customer_phone", customerPhone);
+      if (redemptionError || (count ?? 0) >= discount.per_customer_limit) {
+        return jsonResponse(400, {
+          error: "This discount code has reached its customer limit.",
+        });
+      }
+    }
+    const discountAmount = Math.min(
+      discount.max_cap === null ? subtotal : Number(discount.max_cap),
+      discount.type === "percentage"
+        ? (subtotal * Number(discount.value)) / 100
+        : Number(discount.value),
+    );
+    const { error: updateError } = await admin
+      .from("orders")
+      .update({
+        discount_id: discount.id,
+        discount_amount: Math.max(0, discountAmount),
+        total_amount: Math.max(
+          0,
+          Number(data.total_amount) - Math.max(0, discountAmount),
+        ),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.order_id);
+    if (updateError)
+      return jsonResponse(400, {
+        error: "The discount could not be applied to this order.",
+      });
+    data.discount_id = discount.id;
+    data.discount_amount = Math.max(0, discountAmount);
+    data.total_amount = Math.max(
+      0,
+      Number(data.total_amount) - Math.max(0, discountAmount),
+    );
   }
 
   return jsonResponse(201, { ok: true, ...data });
