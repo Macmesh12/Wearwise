@@ -53,6 +53,7 @@ Deno.serve(async (request) => {
   const customerPhone = cleanText(customer.phone, 40);
   const customerEmail = cleanText(customer.email, 160).toLowerCase();
   const deliveryMethod = cleanText(delivery.method, 40);
+  const deliveryRegion = cleanText(delivery.region, 120);
 
   if (!/^[0-9a-f-]{36}$/i.test(itemId)) return jsonResponse(400, { error: "That shop item could not be found." });
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) return jsonResponse(400, { error: "Choose a quantity between 1 and 20." });
@@ -66,7 +67,7 @@ Deno.serve(async (request) => {
     return jsonResponse(400, { error: "Choose one of the delivery methods." });
   }
 
-  const { data, error } = await admin.rpc("create_store_purchase", {
+  const { data, error } = await admin.rpc("create_store_purchase_with_area", {
     p_item_id: itemId,
     p_quantity: quantity,
     p_size: size,
@@ -75,6 +76,7 @@ Deno.serve(async (request) => {
     p_customer_phone: customerPhone,
     p_customer_email: customerEmail,
     p_delivery_method: deliveryMethod,
+    p_delivery_region: deliveryRegion,
     p_delivery_area: cleanText(delivery.area, 120),
     p_delivery_address: cleanText(delivery.address, 500),
     p_delivery_instructions: cleanText(delivery.instructions, 500),

@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, Pres
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { publicSupabaseAnonKey, publicSupabaseUrl } from "../lib/supabase";
 
-const colors = { paper: "#F7F7F5", ink: "#17191D", muted: "#737780", plum: "#D65B3E", violet: "#F2EDE8", line: "#E4E6E9", white: "#FFFFFF", red: "#B74A43", green: "#4D7554" };
+const colors = { paper: "#F7F7F3", ink: "#0A0A0A", muted: "#767670", plum: "#0A0A0A", violet: "#EEEEEA", line: "#D7D7D0", white: "#FFFFFF", red: "#B74A43", green: "#4D7554" };
 
 export default function PayScreen() {
   const router = useRouter();
