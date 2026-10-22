@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import AdminSections from "./AdminSections";
 import "./admin.css";
+import { enablePushNotifications } from "./lib/push";
 import { supabase } from "./lib/supabase";
 
 const ADMIN_USER_ID = "c219bece-37e4-4357-a61d-0cb75674ed4c";
@@ -254,6 +255,7 @@ function Admin({ onExit }: { onExit: () => void }) {
   const [dataError, setDataError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [pushStatus, setPushStatus] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -499,6 +501,21 @@ function Admin({ onExit }: { onExit: () => void }) {
     setWorking(false);
   }
 
+  async function enablePhoneNotifications() {
+    setPushStatus("Enabling…");
+    try {
+      await enablePushNotifications();
+      setPushStatus("Phone notifications enabled");
+    } catch (cause) {
+      setPushStatus(
+        cause instanceof Error
+          ? cause.message
+          : "Could not enable notifications.",
+      );
+    }
+    window.setTimeout(() => setPushStatus(""), 5000);
+  }
+
   async function openNotification(notification: AdminNotification) {
     await supabase
       .from("admin_notifications")
@@ -665,6 +682,18 @@ function Admin({ onExit }: { onExit: () => void }) {
             <span>WEARWISE /</span> {activeNav}
           </div>
           <div className="admin-top-actions">
+            <button
+              className="admin-push-button"
+              onClick={() => void enablePhoneNotifications()}
+              title="Enable phone notifications"
+            >
+              Enable alerts
+            </button>
+            {pushStatus && (
+              <span className="admin-push-status" role="status">
+                {pushStatus}
+              </span>
+            )}
             <button
               className="admin-search"
               onClick={() => {

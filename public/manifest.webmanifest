@@ -1,0 +1,9 @@
+{
+  "name": "WearWise Admin",
+  "short_name": "WearWise",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#f3f2ee",
+  "theme_color": "#141414",
+  "icons": []
+}
