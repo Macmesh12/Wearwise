@@ -1976,6 +1976,7 @@ function ProductsPage({
               <thead>
                 <tr>
                   <th>DESIGN</th>
+                  <th>CODE</th>
                   <th>CATEGORY</th>
                   <th>STATUS</th>
                   <th>ACTIONS</th>
@@ -2005,6 +2006,9 @@ function ProductsPage({
                           />
                           <strong>{d.title || "WearWise Design"}</strong>
                         </div>
+                      </td>
+                      <td>
+                        <code>{d.id.slice(0, 8).toUpperCase()}</code>
                       </td>
                       <td>{d.category}</td>
                       <td>

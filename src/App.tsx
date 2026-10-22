@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import Admin from "./Admin";
 import {
-  publicSupabaseAnonKey,
-  publicSupabaseUrl,
-  supabase,
+    publicSupabaseAnonKey,
+    publicSupabaseUrl,
+    supabase,
 } from "./lib/supabase";
 
 type Page =
@@ -17,6 +17,7 @@ type Page =
   | "design"
   | "request"
   | "track"
+  | "contact"
   | "admin";
 
 const photos = {
@@ -341,6 +342,29 @@ function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
+  useEffect(() => {
+    const pageTitles: Partial<Record<Page, string>> = {
+      home: "WearWise | Ghanaian Streetwear",
+      shop: "Shop | WearWise",
+      cart: "Your Cart | WearWise",
+      checkout: "Checkout | WearWise",
+      explore: "Design Archive | WearWise",
+      request: selectedDesign
+        ? "Request This Design | WearWise"
+        : "Request a Custom Design | WearWise",
+      track: "Track Your Order | WearWise",
+      contact: "Contact WearWise",
+      "payment-return": "Payment Update | WearWise",
+      admin: "Admin | WearWise",
+    };
+    document.title =
+      page === "product" && selectedProduct
+        ? `${selectedProduct.name} | WearWise`
+        : page === "design" && selectedDesign
+          ? `${selectedDesign.name} | WearWise`
+          : (pageTitles[page] ?? "WearWise | Ghanaian Streetwear");
+  }, [page, selectedProduct, selectedDesign]);
+
   const go = (next: Page) => {
     setPage(next);
     const targetPath =
@@ -379,7 +403,7 @@ function App() {
     <CatalogContext.Provider value={{ products, designs }}>
       <div className="app">
         <div className="ticker">
-          <span>FREE DELIVERY IN ACCRA ON ORDERS OVER GHS 800</span>
+          <span>FREE DELIVERY TO ALL UNIVERSITIES WITHIN ACCRA</span>
           <span>MADE FOR THE BOLD • DESIGNED IN GHANA</span>
         </div>
         <header className="header">
@@ -497,13 +521,20 @@ function App() {
           {page === "design" && selectedDesign && (
             <DesignDetail design={selectedDesign} go={go} />
           )}
-          {page === "request" && selectedDesign && (
+          {page === "request" && (
             <RequestForm design={selectedDesign} go={go} />
           )}
           {page === "track" && <Track />}
+          {page === "contact" && <Contact />}
         </main>
 
-        <Footer go={go} />
+        <Footer
+          go={go}
+          openCustomRequest={() => {
+            setSelectedDesign(null);
+            go("request");
+          }}
+        />
         {toast && (
           <div className="toast">
             <Icon name="check" />
@@ -557,7 +588,7 @@ function Home({
     <>
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow light">NEW SEASON / 2025</span>
+          <span className="eyebrow light">NEW SEASON / 2026</span>
           <h1>
             WEAR
             <br />
@@ -1805,7 +1836,7 @@ function RequestForm({
   design,
   go,
 }: {
-  design: Design;
+  design: Design | null;
   go: (p: Page) => void;
 }) {
   const [products, setProducts] = useState<
@@ -1882,9 +1913,9 @@ function RequestForm({
     form.append(
       "payload",
       JSON.stringify({
-        orderType: "existing_design",
+        orderType: design ? "existing_design" : "custom_design",
         productId: chosen.id,
-        designId: design.id,
+        ...(design ? { designId: design.id } : {}),
         size,
         color,
         quantity: qty,
@@ -1955,21 +1986,42 @@ function RequestForm({
   return (
     <div className="request-page">
       <div className="request-preview">
-        <button className="back-link light" onClick={() => go("design")}>
-          ← Back to design
+        <button
+          className="back-link light"
+          onClick={() => go(design ? "design" : "home")}
+        >
+          ← Back
         </button>
-        <img src={design.image} alt={design.name} />
-        <div>
-          <span>{design.code}</span>
-          <h2>{design.name}</h2>
-        </div>
+        {design ? (
+          <>
+            <img src={design.image} alt={design.name} />
+            <div>
+              <span>{design.code}</span>
+              <h2>{design.name}</h2>
+            </div>
+          </>
+        ) : (
+          <div className="request-custom-preview">
+            <span>WEARWISE / CUSTOM</span>
+            <h2>Bring your own idea.</h2>
+            <p>Describe the design you want or upload a reference image.</p>
+          </div>
+        )}
       </div>
       <div className="request-form">
-        <span className="eyebrow">CUSTOM REQUEST</span>
-        <h1>Build your fit.</h1>
+        <span className="eyebrow">
+          {design ? "CUSTOM REQUEST" : "REQUEST A CUSTOM DESIGN"}
+        </span>
+        <h1>{design ? "Build your fit." : "Request a custom design."}</h1>
         <p>
-          Request Design <strong>{design.code}</strong>. We’ll confirm
-          availability and price before payment.
+          {design ? (
+            <>
+              Request Design <strong>{design.code}</strong>. We’ll confirm
+              availability and price before payment.
+            </>
+          ) : (
+            "Tell us what you want printed and we’ll confirm availability and price before payment."
+          )}
         </p>
         {loading ? (
           <p>Loading active shirt options…</p>
@@ -2252,7 +2304,69 @@ function Track() {
   );
 }
 
-function Footer({ go }: { go: (p: Page) => void }) {
+function Contact() {
+  const socials = [
+    {
+      name: "Instagram",
+      handle: "@wearwise_gh",
+      href: "https://www.instagram.com/wearwise_gh?xtok=eWlnMmF1MmxyMmww",
+      icon: "https://www.google.com/s2/favicons?domain=instagram.com&sz=64",
+    },
+    {
+      name: "WhatsApp",
+      handle: "026 992 2736",
+      href: "https://wa.me/233269922736",
+      icon: "https://www.google.com/s2/favicons?domain=whatsapp.com&sz=64",
+    },
+    {
+      name: "TikTok",
+      handle: "@wearwise_gh",
+      href: "https://www.tiktok.com/@wearwise_gh?_r=1&_t=ZS-9AjHYiwer9o",
+      icon: "https://www.google.com/s2/favicons?domain=tiktok.com&sz=64",
+    },
+    {
+      name: "Snapchat",
+      handle: "wearwise_gh",
+      href: "https://www.snapchat.com/add/wearwise_gh?share_id=3qz7ya9e7OA&locale=en-GB",
+      icon: "https://www.google.com/s2/favicons?domain=snapchat.com&sz=64",
+    },
+  ];
+  return (
+    <div className="page narrow contact-page">
+      <div className="page-title left">
+        <span className="eyebrow">CONTACT WEARWISE</span>
+        <h1>Stay connected.</h1>
+        <p>Follow the latest drops, designs, and order updates.</p>
+      </div>
+      <div className="contact-socials">
+        {socials.map((social) => (
+          <a
+            className="contact-social"
+            href={social.href}
+            target="_blank"
+            rel="noreferrer"
+            key={social.name}
+          >
+            <img src={social.icon} alt="" />
+            <span>
+              <strong>{social.name}</strong>
+              <small>{social.handle}</small>
+            </span>
+            <b>↗</b>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Footer({
+  go,
+  openCustomRequest,
+}: {
+  go: (p: Page) => void;
+  openCustomRequest: () => void;
+}) {
   return (
     <footer>
       <div className="footer-top">
@@ -2276,19 +2390,61 @@ function Footer({ go }: { go: (p: Page) => void }) {
           <div>
             <strong>HELP</strong>
             <button onClick={() => go("track")}>Track order</button>
-            <button>Delivery</button>
-            <button>Contact us</button>
+            <button onClick={openCustomRequest}>Request custom design</button>
+            <button onClick={() => go("contact")}>Contact us</button>
           </div>
           <div>
             <strong>CONNECT</strong>
-            <button>Instagram ↗</button>
-            <button>WhatsApp ↗</button>
+            <a
+              href="https://www.instagram.com/wearwise_gh?xtok=eWlnMmF1MmxyMmww"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="https://www.google.com/s2/favicons?domain=instagram.com&sz=32"
+                alt=""
+              />
+              <span>Instagram</span>
+            </a>
+            <a
+              href="https://wa.me/233269922736"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="https://www.google.com/s2/favicons?domain=whatsapp.com&sz=32"
+                alt=""
+              />
+              <span>WhatsApp</span>
+            </a>
+            <a
+              href="https://www.tiktok.com/@wearwise_gh?_r=1&_t=ZS-9AjHYiwer9o"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="https://www.google.com/s2/favicons?domain=tiktok.com&sz=32"
+                alt=""
+              />
+              <span>TikTok</span>
+            </a>
+            <a
+              href="https://www.snapchat.com/add/wearwise_gh?share_id=3qz7ya9e7OA&locale=en-GB"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <img
+                src="https://www.google.com/s2/favicons?domain=snapchat.com&sz=32"
+                alt=""
+              />
+              <span>Snapchat</span>
+            </a>
           </div>
         </div>
       </div>
       <div className="footer-bottom">
-        <span>© 2025 WEARWISE GHANA</span>
-        <span>ACCRA · KUMASI · EVERYWHERE</span>
+        <span>© 2026 WEARWISE GHANA</span>
+        <span>EVERYWHERE IN ACCRA</span>
       </div>
     </footer>
   );
