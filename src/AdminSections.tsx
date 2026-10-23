@@ -21,6 +21,7 @@ type Order = {
   customer_phone?: string | null;
   customer_email?: string | null;
   customer_request?: string | null;
+  customer_artwork_path?: string | null;
   selected_design_snapshot?: unknown;
   proof_image_path?: string | null;
   delivery_area?: string | null;
@@ -1073,6 +1074,7 @@ function RequestQuoteDrawer({
   const [busy, setBusy] = useState(false);
   const [proofBusy, setProofBusy] = useState(false);
   const [proofUrl, setProofUrl] = useState("");
+  const [customerArtworkUrl, setCustomerArtworkUrl] = useState("");
   const [paymentLink, setPaymentLink] = useState(row.payment_link ?? "");
   useEffect(() => {
     let active = true;
@@ -1083,10 +1085,17 @@ function RequestQuoteDrawer({
         .then(({ data }) => {
           if (active) setProofUrl(data?.signedUrl ?? "");
         });
+    if (row.customer_artwork_path)
+      supabase.storage
+        .from("customer-artwork")
+        .createSignedUrl(row.customer_artwork_path, 3600)
+        .then(({ data }) => {
+          if (active) setCustomerArtworkUrl(data?.signedUrl ?? "");
+        });
     return () => {
       active = false;
     };
-  }, [row.proof_image_path]);
+  }, [row.proof_image_path, row.customer_artwork_path]);
   async function uploadProof(file: File | null) {
     if (!file) return;
     if (row.payment_status !== "paid") {
@@ -1567,6 +1576,19 @@ function RequestQuoteDrawer({
           </div>
         )}
       </DrawerSection>
+      {row.customer_artwork_path && (
+        <DrawerSection title="Customer artwork">
+          <a
+            className="table-link"
+            href={customerArtworkUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View customer artwork
+          </a>
+          <small>Private upload · {row.customer_artwork_path}</small>
+        </DrawerSection>
+      )}
       <DrawerSection title="Locked costs">
         <div className="drawer-fields two">
           <label>

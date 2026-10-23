@@ -312,7 +312,7 @@ function Admin({ onExit }: { onExit: () => void }) {
         supabase
           .from("orders")
           .select(
-            "id,order_code,order_type,status,payment_status,customer_name,customer_phone,customer_email,customer_request,selected_design_snapshot,proof_image_path,delivery_area,delivery_address,delivery_instructions,subtotal,discount_amount,discount_id,delivery_fee,rush_fee,total_amount,amount_paid,amount_refunded,currency_code,rush_days_early,availability_confirmed_at,payment_link,payment_link_expiry,approval_status,cost_price_locked,supplier_cost,profit,cost_locked_at,actual_sourcing_cost,actual_printing_cost,actual_delivery_cost,actual_payment_fee,actual_other_cost,actual_costs_recorded_at,created_at,order_items(quantity,store_item_id,product_name_snapshot,requested_size,requested_color,quoted_unit_price)",
+            "id,order_code,order_type,status,payment_status,customer_name,customer_phone,customer_email,customer_request,customer_artwork_path,selected_design_snapshot,proof_image_path,delivery_area,delivery_address,delivery_instructions,subtotal,discount_amount,discount_id,delivery_fee,rush_fee,total_amount,amount_paid,amount_refunded,currency_code,rush_days_early,availability_confirmed_at,payment_link,payment_link_expiry,approval_status,cost_price_locked,supplier_cost,profit,cost_locked_at,actual_sourcing_cost,actual_printing_cost,actual_delivery_cost,actual_payment_fee,actual_other_cost,actual_costs_recorded_at,created_at,order_items(quantity,store_item_id,product_name_snapshot,requested_size,requested_color,quoted_unit_price)",
           )
           .order("created_at", { ascending: false })
           .limit(1000),

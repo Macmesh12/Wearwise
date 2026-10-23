@@ -2166,3 +2166,31 @@ footer {
     height: 180px;
   }
 }
+/* --- Loading Spinner --- */
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid #e8e8e8;
+  border-top-color: #c8ff00;
+  animation: spinscale 0.8s linear infinite;
+}
+@keyframes spinscale {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 14px;
+  font-family: 'Sakana', sans-serif;
+  color: #c8ff00;
+}
