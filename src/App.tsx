@@ -451,7 +451,9 @@ function App() {
 
         <main>
           {catalogLoading && (
-            <div className="catalog-message">Loading WearWise…</div>
+            <div className="page-loading">
+              <div className="spinner" />
+            </div>
           )}
           {catalogError && (
             <div role="alert" className="catalog-message">
@@ -2024,7 +2026,9 @@ function RequestForm({
           )}
         </p>
         {loading ? (
-          <p>Loading active shirt options…</p>
+          <div className="page-loading">
+            <div className="spinner" />
+          </div>
         ) : (
           <>
             <div className="form-grid">

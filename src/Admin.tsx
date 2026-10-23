@@ -928,7 +928,7 @@ function Dashboard({
           })
           .toUpperCase()}
         title={`${greeting}, ${data.preferences?.owner_name || "WearWise owner"}.`}
-        action={loading ? "Loading…" : "Refresh data"}
+        action={loading ? "" : "Refresh data"}
         onAction={onRefresh}
       />
       <div className="kpi-grid">
@@ -1006,7 +1006,7 @@ function Dashboard({
       <section className="a-panel activity">
         <PanelHead
           title="Recent activity"
-          meta={loading ? "Loading" : "Live"}
+          meta={loading ? "" : "Live"}
         />
         <div className="admin-live-table-wrap">
           <table>
