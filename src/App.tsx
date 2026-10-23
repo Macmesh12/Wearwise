@@ -40,7 +40,7 @@ type Product = {
   name: string;
   category: string;
   price: number;
-  image: string;
+  images: string[];
   stock: string;
   sizeOptions: string[];
   colorOptions: string[];
@@ -280,24 +280,28 @@ function App() {
         stock_quantity: number | null;
       }[];
       setProducts(
-        storeItems.map((item) => ({
-          id: item.id,
-          name: item.name,
-          category: item.category,
-          description: item.description ?? "",
-          price: Number(item.price) || 0,
-          image: item.image_paths?.[0]
-            ? supabase.storage
-                .from("store-items")
-                .getPublicUrl(item.image_paths[0]).data.publicUrl
-            : "",
-          stock:
-            item.stock_quantity !== null && item.stock_quantity < 5
-              ? "Low stock"
-              : "In stock",
-          sizeOptions: item.size_options ?? [],
-          colorOptions: item.color_options ?? [],
-        })),
+        storeItems.map((item) => {
+          const imagePaths = item.image_paths ?? [];
+          const images = imagePaths.map((p) =>
+            supabase.storage
+              .from("store-items")
+              .getPublicUrl(p).data.publicUrl,
+          );
+          return {
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            description: item.description ?? "",
+            price: Number(item.price) || 0,
+            images,
+            stock:
+              item.stock_quantity !== null && item.stock_quantity < 5
+                ? "Low stock"
+                : "In stock",
+            sizeOptions: item.size_options ?? [],
+            colorOptions: item.color_options ?? [],
+          };
+        }),
       );
       const gallery = (designResult.data ?? []) as {
         id: string;
@@ -689,7 +693,7 @@ function ProductCard({
   return (
     <article className="product-card">
       <button className="product-image" onClick={onClick}>
-        <img src={product.image} alt={product.name} />
+        <img src={product.images[0] || ""} alt={product.name} />
         <span className={`stock ${product.stock === "Low stock" ? "low" : ""}`}>
           {product.stock}
         </span>
@@ -818,6 +822,7 @@ function ProductDetail({
   const [qty, setQty] = useState(1);
   const [size, setSize] = useState(product.sizeOptions[0] ?? "");
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
+  const [activeImage, setActiveImage] = useState(0);
   return (
     <div className="page">
       <button className="back-link" onClick={() => go("shop")}>
@@ -826,14 +831,21 @@ function ProductDetail({
       <div className="detail-layout">
         <div className="gallery">
           <div className="thumbs">
-            {[1, 2, 3].map((x) => (
-              <button key={x}>
-                <img src={product.image} alt="" />
+            {product.images.map((img, i) => (
+              <button
+                key={i}
+                className={activeImage === i ? "active" : ""}
+                onClick={() => setActiveImage(i)}
+              >
+                <img src={img} alt="" />
               </button>
             ))}
           </div>
           <div className="main-image">
-            <img src={product.image} alt={product.name} />
+            <img
+              src={product.images[activeImage] || ""}
+              alt={product.name}
+            />
           </div>
         </div>
         <div className="detail-copy">
@@ -989,7 +1001,7 @@ function Cart({
         <div className="cart-list">
           {items.map((p) => (
             <div className="cart-item" key={p.id}>
-              <img src={p.image} alt={p.name} />
+              <img src={p.images[0] || ""} alt={p.name} />
               <div className="cart-item-copy">
                 <span>{p.category}</span>
                 <h3>{p.name}</h3>

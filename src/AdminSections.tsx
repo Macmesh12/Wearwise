@@ -1639,6 +1639,7 @@ function ProductsPage({
   const [globalSellingPrice, setGlobalSellingPrice] = useState("");
   const [globalCostPrice, setGlobalCostPrice] = useState("");
   const [globalStock, setGlobalStock] = useState("10");
+  const [imagePathsToDelete, setImagePathsToDelete] = useState<string[]>([]);
   const current = editing && typeof editing === "object" ? editing : null;
   const visible = rows.filter(
     (r) =>
@@ -1726,8 +1727,20 @@ function ProductsPage({
     const validVariants = drafts.filter((v) => v.size.trim() && v.color.trim());
     const price = Number(validVariants[0]?.selling_price),
       stock = validVariants.reduce((sum, v) => sum + Number(v.stock || 0), 0);
-    const paths =
+    const existingPaths =
       editing && typeof editing === "object" ? [...editing.image_paths] : [];
+    const pathsToKeep = existingPaths.filter((p) => !imagePathsToDelete.includes(p));
+    if (imagePathsToDelete.length) {
+      const { error: delError } = await supabase.storage
+        .from("store-items")
+        .remove(imagePathsToDelete);
+      if (delError) {
+        say(`Could not remove image(s): ${delError.message}`);
+        setBusy(false);
+        return;
+      }
+    }
+    const paths = [...pathsToKeep];
     for (const file of f
       .getAll("photos")
       .filter((v): v is File => v instanceof File && v.size > 0)) {
@@ -2279,6 +2292,31 @@ function ProductsPage({
             </label>
             <label className="admin-form-wide">
               Photos (JPEG, PNG, WebP · max 5 MB each)
+              {current?.image_paths?.length && (
+                <div className="photo-gallery" style={{ marginTop: 8 }}>
+                  {current.image_paths.map((path, i) => (
+                    <div key={i} className="photo-item">
+                      <img
+                        src={`https://qavvobfskuhebepnglhh.supabase.co/storage/v1/object/public/store-items/${path}`}
+                        alt={`Product photo ${i + 1}`}
+                        className="photo-thumb"
+                      />
+                      <button
+                        type="button"
+                        className="photo-remove"
+                        onClick={() => setImagePathsToDelete([...imagePathsToDelete, path])}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {imagePathsToDelete.length > 0 && (
+                    <p className="photo-hint">
+                      {imagePathsToDelete.length} image(s) marked for removal.
+                    </p>
+                  )}
+                </div>
+              )}
               <input
                 name="photos"
                 type="file"
