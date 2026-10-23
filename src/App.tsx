@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import Admin from "./Admin";
 import {
-    publicSupabaseAnonKey,
-    publicSupabaseUrl,
-    supabase,
+  publicSupabaseAnonKey,
+  publicSupabaseUrl,
+  supabase,
 } from "./lib/supabase";
 
 type Page =
@@ -590,9 +590,9 @@ function Home({
         <div className="hero-copy">
           <span className="eyebrow light">NEW SEASON / 2026</span>
           <h1>
-            WEAR
+            WEAR <em>YOU</em>
             <br />
-            THE <em>WISE.</em>
+            BE <em>YOU.</em>
           </h1>
           <p>Streetwear born in Accra. Built for people who move different.</p>
           <div className="button-row">
@@ -2370,15 +2370,20 @@ function Footer({
   return (
     <footer>
       <div className="footer-top">
-        <div>
-          <button className="logo light" onClick={() => go("home")}>
-            WEAR<span>WISE</span>
+        <div className="footer-identity">
+          <button className="custom-request-link" onClick={openCustomRequest}>
+            Request custom design
           </button>
-          <p>
-            Ghanaian streetwear for people
-            <br />
-            who know who they are.
-          </p>
+          <div className="footer-brand">
+            <button className="logo light" onClick={() => go("home")}>
+              WEAR<span>WISE</span>
+            </button>
+            <p>
+              Ghanaian streetwear for people
+              <br />
+              who know who they are.
+            </p>
+          </div>
         </div>
         <div className="footer-links">
           <div>
@@ -2390,7 +2395,6 @@ function Footer({
           <div>
             <strong>HELP</strong>
             <button onClick={() => go("track")}>Track order</button>
-            <button onClick={openCustomRequest}>Request custom design</button>
             <button onClick={() => go("contact")}>Contact us</button>
           </div>
           <div>

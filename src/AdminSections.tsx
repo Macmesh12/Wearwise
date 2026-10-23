@@ -231,11 +231,17 @@ export default function AdminSections({
   data,
   onRefresh,
   onDiscountSaved,
+  onEnablePush,
+  pushStatus,
+  pushEnabled,
 }: {
   page: AdminPage;
   data: Data;
   onRefresh: () => void;
   onDiscountSaved: (discount: Discount) => void;
+  onEnablePush: () => void;
+  pushStatus: string;
+  pushEnabled: boolean;
 }) {
   const [notice, setNotice] = useState("");
   const say = (message: string) => {
@@ -316,6 +322,9 @@ export default function AdminSections({
           preferences={data.preferences}
           onRefresh={onRefresh}
           say={say}
+          onEnablePush={onEnablePush}
+          pushStatus={pushStatus}
+          pushEnabled={pushEnabled}
         />
       )}
       {page === "analytics" && (
@@ -3414,11 +3423,17 @@ function SettingsPage({
   preferences,
   onRefresh,
   say,
+  onEnablePush,
+  pushStatus,
+  pushEnabled,
 }: {
   value: Settings;
   preferences: Preferences | null;
   onRefresh: () => void;
   say: (s: string) => void;
+  onEnablePush: () => void;
+  pushStatus: string;
+  pushEnabled: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   async function save(e: FormEvent<HTMLFormElement>) {
@@ -3557,6 +3572,29 @@ function SettingsPage({
               <p>Choose what needs your attention.</p>
             </div>
             <div className="toggle-list">
+              <div className="push-setting">
+                <span>
+                  <strong>Phone notifications</strong>
+                  <small>
+                    Receive WearWise alerts even when the site is closed.
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className={`notification-toggle ${pushEnabled ? "on" : ""}`}
+                  onClick={onEnablePush}
+                  role="switch"
+                  aria-checked={pushEnabled}
+                  aria-label="Enable phone notifications"
+                >
+                  <i />
+                </button>
+                {pushStatus && (
+                  <small className="push-status" role="status">
+                    {pushStatus}
+                  </small>
+                )}
+              </div>
               {[
                 [
                   "New paid orders",

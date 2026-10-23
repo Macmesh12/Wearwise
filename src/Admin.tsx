@@ -256,6 +256,7 @@ function Admin({ onExit }: { onExit: () => void }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pushStatus, setPushStatus] = useState("");
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -505,6 +506,7 @@ function Admin({ onExit }: { onExit: () => void }) {
     setPushStatus("Enabling…");
     try {
       await enablePushNotifications();
+      setPushEnabled(true);
       setPushStatus("Phone notifications enabled");
     } catch (cause) {
       setPushStatus(
@@ -683,18 +685,6 @@ function Admin({ onExit }: { onExit: () => void }) {
           </div>
           <div className="admin-top-actions">
             <button
-              className="admin-push-button"
-              onClick={() => void enablePhoneNotifications()}
-              title="Enable phone notifications"
-            >
-              Enable alerts
-            </button>
-            {pushStatus && (
-              <span className="admin-push-status" role="status">
-                {pushStatus}
-              </span>
-            )}
-            <button
               className="admin-search"
               onClick={() => {
                 if (page !== "orders") setPage("orders");
@@ -785,6 +775,9 @@ function Admin({ onExit }: { onExit: () => void }) {
                   ],
                 }))
               }
+              onEnablePush={enablePhoneNotifications}
+              pushStatus={pushStatus}
+              pushEnabled={pushEnabled}
             />
           )}
         </div>

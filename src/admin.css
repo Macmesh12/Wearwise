@@ -1264,6 +1264,48 @@ code {
   color: var(--a-muted);
   font-size: 8px;
 }
+.notification-toggle {
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: #d8dad5;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.notification-toggle i {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px #aaa;
+  transition: transform 0.2s;
+}
+.notification-toggle.on {
+  background: var(--a-lime);
+}
+.notification-toggle.on i {
+  transform: translateX(18px);
+}
+.push-setting {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--a-line);
+}
+.push-setting > span {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+}
+.push-setting small,
+.push-status {
+  color: var(--a-muted);
+  font-size: 8px;
+}
 
 .drawer-overlay {
   position: fixed;
