@@ -1634,6 +1634,11 @@ function ProductsPage({
   const [tab, setTab] = useState("Shop Products");
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<VariantDraft[]>([]);
+  const [sizes, setSizes] = useState("S, M, L");
+  const [colors, setColors] = useState("Black");
+  const [globalSellingPrice, setGlobalSellingPrice] = useState("");
+  const [globalCostPrice, setGlobalCostPrice] = useState("");
+  const [globalStock, setGlobalStock] = useState("10");
   const current = editing && typeof editing === "object" ? editing : null;
   const visible = rows.filter(
     (r) =>
@@ -1643,6 +1648,14 @@ function ProductsPage({
   function openEditor(item: StoreItem | null = null) {
     if (item) {
       const saved = variants.filter((v) => v.product_id === item.id);
+      const sizeList = [...new Set(saved.map((v) => v.size))].join(", ");
+      const colorList = [...new Set(saved.map((v) => v.color))].join(", ");
+      const first = saved[0];
+      setSizes(sizeList);
+      setColors(colorList);
+      setGlobalSellingPrice(first ? String(first.selling_price) : String(item.price));
+      setGlobalCostPrice(first && first.cost_price != null ? String(first.cost_price) : "");
+      setGlobalStock(saved.length ? String(saved[0].stock) : String(item.stock_quantity ?? 0));
       setDrafts(
         saved.length
           ? saved.map((v) => ({
@@ -1660,7 +1673,12 @@ function ProductsPage({
               cost_price: String(item.purchase_cost ?? ""),
             })),
       );
-    } else
+    } else {
+      setSizes("S, M, L");
+      setColors("Black");
+      setGlobalSellingPrice("");
+      setGlobalCostPrice("");
+      setGlobalStock("10");
       setDrafts([
         {
           size: "S",
@@ -1684,6 +1702,7 @@ function ProductsPage({
           cost_price: "",
         },
       ]);
+    }
     setEditing(item ?? false);
   }
   async function toggleDesign(design: GalleryDesign) {
@@ -2125,135 +2144,130 @@ function ProductsPage({
             <div className="admin-form-wide">
               <div className="drawer-section-head">
                 <h3>Variants builder</h3>
+              </div>
+              <div className="variant-grid">
+                <label>
+                  Sizes (comma separated)
+                  <input
+                    aria-label="Variant sizes"
+                    value={sizes}
+                    onChange={(e) => setSizes(e.target.value)}
+                    placeholder="e.g. S, M, L, XL"
+                  />
+                </label>
+                <label>
+                  Colours (comma separated)
+                  <input
+                    aria-label="Variant colours"
+                    value={colors}
+                    onChange={(e) => setColors(e.target.value)}
+                    placeholder="e.g. Black, White, Red"
+                  />
+                </label>
+                <label>
+                  Selling price (GHS)
+                  <input
+                    aria-label="Global selling price"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={globalSellingPrice}
+                    onChange={(e) => setGlobalSellingPrice(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Cost price (GHS)
+                  <input
+                    aria-label="Global cost price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={globalCostPrice}
+                    onChange={(e) => setGlobalCostPrice(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Stock per variant
+                  <input
+                    aria-label="Global stock"
+                    type="number"
+                    min="0"
+                    value={globalStock}
+                    onChange={(e) => setGlobalStock(e.target.value)}
+                  />
+                </label>
                 <button
                   type="button"
-                  onClick={() =>
-                    setDrafts([
-                      ...drafts,
-                      {
-                        size: "",
-                        color: "",
-                        stock: "0",
-                        selling_price: "",
-                        cost_price: "",
-                      },
-                    ])
-                  }
+                  className="a-button dark"
+                  onClick={() => {
+                    const sizeList = sizes
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    const colorList = colors
+                      .split(",")
+                      .map((c) => c.trim())
+                      .filter(Boolean);
+                    if (!sizeList.length || !colorList.length) {
+                      say("Enter at least one size and one colour.");
+                      return;
+                    }
+                    setDrafts(
+                      sizeList.flatMap((size) =>
+                        colorList.map((color) => ({
+                          size,
+                          color,
+                          stock: globalStock,
+                          selling_price: globalSellingPrice,
+                          cost_price: globalCostPrice,
+                        })),
+                      ),
+                    );
+                  }}
                 >
-                  + Add variant
+                  Generate variants
                 </button>
               </div>
-              <table className="variant-table">
-                <thead>
-                  <tr>
-                    <th>SIZE</th>
-                    <th>COLOUR</th>
-                    <th>STOCK</th>
-                    <th>SELLING</th>
-                    <th>COST</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {drafts.map((v, index) => (
-                    <tr key={index}>
-                      <td>
-                        <input
-                          aria-label="Variant size"
-                          value={v.size}
-                          onChange={(e) =>
-                            setDrafts(
-                              drafts.map((x, i) =>
-                                i === index
-                                  ? { ...x, size: e.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label="Variant colour"
-                          value={v.color}
-                          onChange={(e) =>
-                            setDrafts(
-                              drafts.map((x, i) =>
-                                i === index
-                                  ? { ...x, color: e.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label="Variant stock"
-                          type="number"
-                          min="0"
-                          value={v.stock}
-                          onChange={(e) =>
-                            setDrafts(
-                              drafts.map((x, i) =>
-                                i === index
-                                  ? { ...x, stock: e.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label="Variant selling price"
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={v.selling_price}
-                          onChange={(e) =>
-                            setDrafts(
-                              drafts.map((x, i) =>
-                                i === index
-                                  ? { ...x, selling_price: e.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label="Variant cost price"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={v.cost_price}
-                          onChange={(e) =>
-                            setDrafts(
-                              drafts.map((x, i) =>
-                                i === index
-                                  ? { ...x, cost_price: e.target.value }
-                                  : x,
-                              ),
-                            )
-                          }
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDrafts(drafts.filter((_, i) => i !== index))
-                          }
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {drafts.length > 0 && (
+                <div className="variant-preview">
+                  <table className="variant-table">
+                    <thead>
+                      <tr>
+                        <th>SIZE</th>
+                        <th>COLOUR</th>
+                        <th>STOCK</th>
+                        <th>SELLING</th>
+                        <th>COST</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drafts.map((v, index) => (
+                        <tr key={index}>
+                          <td>{v.size}</td>
+                          <td>{v.color}</td>
+                          <td>{v.stock}</td>
+                          <td>{v.selling_price}</td>
+                          <td>{v.cost_price}</td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDrafts(drafts.filter((_, i) => i !== index))
+                              }
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="variant-hint">
+                    {drafts.length} variant(s) will be created.
+                  </p>
+                </div>
+              )}
             </div>
             <label className="admin-form-wide">
               Description
