@@ -827,11 +827,7 @@ function Shop({
         </aside>
         <section className="shop-results">
           <div className="result-bar">
-            <select aria-label="Sort">
-              <option>Featured</option>
-              <option>Price: low to high</option>
-              <option>Newest</option>
-            </select>
+            <span>Featured Products</span>
           </div>
           <div className="product-grid">
             {filtered.map((p) => (

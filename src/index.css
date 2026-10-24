@@ -2483,9 +2483,6 @@ footer {
   }
 
   /* --- Remove top space in Shop mobile --- */
-  .shop-page {
-    padding-top: 20px !important;
-  }
 
   .shop-page .shop-layout {
     margin-top: 0;
@@ -2496,10 +2493,24 @@ footer {
     padding-top: 0;
   }
 
-  /* --- Fixed header, filters, and result bar on mobile --- */
-  .header {
+  .result-bar {
+    margin-top: 30px;
+  }
+
+  /* --- Fixed ticker, header, filters, and result bar on mobile --- */
+  .ticker {
     position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
+    height: 26px;
+    z-index: 70;
+    background: var(--lime);
+  }
+
+  .header {
+    position: fixed;
+    top: 26px;
     left: 0;
     right: 0;
     z-index: 60;
@@ -2507,7 +2518,7 @@ footer {
 
   .filters {
     position: fixed;
-    top: 66px;
+    top: calc(26px + 66px);
     left: 0;
     right: 0;
     z-index: 55;
@@ -2516,11 +2527,15 @@ footer {
 
   .result-bar {
     position: fixed;
-    top: calc(66px + 80px);
     left: 0;
     right: 0;
+    margin-top: 0;
     z-index: 50;
     background: var(--paper);
+  }
+
+  .shop-results {
+    padding-top: calc(26px + 66px + 80px + 45px);
   }
 
   /* --- Restyle sort dropdown --- */
