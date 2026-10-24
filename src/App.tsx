@@ -827,7 +827,6 @@ function Shop({
         </aside>
         <section className="shop-results">
           <div className="result-bar">
-            <strong>{filtered.length} products</strong>
             <select aria-label="Sort">
               <option>Featured</option>
               <option>Price: low to high</option>
