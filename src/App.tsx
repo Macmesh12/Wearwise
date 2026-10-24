@@ -121,6 +121,23 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
       </>
     ),
     check: <path d="m5 12 4 4L19 6" />,
+    home: (
+      <>
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </>
+    ),
+    order: (
+      <>
+        <path d="M16 11v7a4 4 0 0 1-8 0v-7M8 7l8 4 8-4M16 11v7" />
+      </>
+    ),
+    user: (
+      <>
+        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </>
+    ),
   };
   return (
     <svg
@@ -282,10 +299,10 @@ function App() {
       setProducts(
         storeItems.map((item) => {
           const imagePaths = item.image_paths ?? [];
-          const images = imagePaths.map((p) =>
-            supabase.storage
-              .from("store-items")
-              .getPublicUrl(p).data.publicUrl,
+          const images = imagePaths.map(
+            (p) =>
+              supabase.storage.from("store-items").getPublicUrl(p).data
+                .publicUrl,
           );
           return {
             id: item.id,
@@ -547,8 +564,48 @@ function App() {
             {toast}
           </div>
         )}
+        <BottomNav page={page} cartCount={cartCount} go={go} />
       </div>
     </CatalogContext.Provider>
+  );
+}
+
+function BottomNav({
+  page,
+  cartCount,
+  go,
+}: {
+  page: Page;
+  cartCount: number;
+  go: (p: Page) => void;
+}) {
+  const navItems = [
+    { label: "Home", page: "home" as Page, icon: "home" },
+    { label: "Shop", page: "shop" as Page, icon: "cart", badge: cartCount },
+    { label: "Explore", page: "explore" as Page, icon: "search" },
+    { label: "Orders", page: "track" as Page, icon: "order" },
+    { label: "Profile", page: "contact" as Page, icon: "user" },
+  ];
+
+  return (
+    <nav className="bottom-nav">
+      {navItems.map((item) => (
+        <button
+          key={item.label}
+          className={`bottom-nav-item${page === item.page ? " active" : ""}`}
+          onClick={() => go(item.page)}
+          aria-label={item.label}
+        >
+          <span className="bottom-nav-icon">
+            <Icon name={item.icon} size={20} />
+          </span>
+          {item.badge && item.badge > 0 && (
+            <span className="bottom-nav-badge">{item.badge}</span>
+          )}
+          <span className="bottom-nav-label">{item.label}</span>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -734,11 +791,11 @@ function Shop({
   );
   return (
     <div className="page">
-      <div className="page-title">
+      {/*<div className="page-title">
         <span className="eyebrow">SHOP / ALL PRODUCTS</span>
         <h1>Wear the wise.</h1>
         <p>Curated essentials. Limited runs. Made to stand out.</p>
-      </div>
+      </div> */}
       <div className="shop-layout">
         <aside className="filters">
           <div className="filter-search">
@@ -842,10 +899,7 @@ function ProductDetail({
             ))}
           </div>
           <div className="main-image">
-            <img
-              src={product.images[activeImage] || ""}
-              alt={product.name}
-            />
+            <img src={product.images[activeImage] || ""} alt={product.name} />
           </div>
         </div>
         <div className="detail-copy">
@@ -856,7 +910,7 @@ function ProductDetail({
           </div>
           <div className="stock-line">
             <span className="status-dot" /> {product.stock}{" "}
-            <small>• Ships in 1–2 days</small>
+            <small>• Deliver within 1–2 days</small>
           </div>
           {product.sizeOptions.length > 0 && (
             <Option title="Select size">
@@ -1474,7 +1528,7 @@ function Checkout({
             {product && count > 0 ? (
               <div className="mini-order">
                 <div>
-                  <img src={product.image} alt="" />
+                  <img src={product.images[0] || ""} alt="" />
                   <span>
                     <strong>{product.name}</strong>
                     <small>Quantity {count}</small>
