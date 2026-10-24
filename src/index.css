@@ -385,7 +385,6 @@ em {
   padding: 0;
   border-radius: var(--radius);
   overflow: hidden;
-  position: relative;
   background: var(--gray-1);
 }
 .product-image img {
@@ -2400,20 +2399,28 @@ footer {
   height: 100%;
 }
 
+.bottom-nav-image {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
 .bottom-nav-badge {
   position: absolute;
   top: -2px;
   right: -2px;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   background: var(--lime);
   color: #000;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid var(--white);
 }
 
 .bottom-nav-label {
@@ -2440,6 +2447,9 @@ footer {
     display: none;
   }
 
+  .filter {
+    display: flex !important;
+  }
   .filter label.check {
     display: flex !important;
     align-items: center;
@@ -2468,5 +2478,58 @@ footer {
 
   .filter label.check input[type="radio"]:checked + span {
     color: var(--lime);
+  }
+
+  /* --- Remove top space in Shop mobile --- */
+  .shop-page {
+    padding-top: 20px !important;
+  }
+
+  .shop-page .shop-layout {
+    margin-top: 0;
+  }
+
+  .shop-page .filters {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  /* --- Sticky header, filters, and result bar on mobile --- */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+  }
+
+  .filters {
+    position: sticky;
+    top: 66px;
+    z-index: 55;
+    background: var(--paper);
+  }
+
+  .result-bar {
+    position: sticky;
+    top: calc(66px + 80px);
+    z-index: 50;
+    background: var(--paper);
+  }
+
+  /* --- Restyle sort dropdown --- */
+  .result-bar select {
+    appearance: none;
+    background: var(--white);
+    border: 1px solid var(--gray-2);
+    border-radius: 8px;
+    padding: 6px 24px 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    cursor: pointer;
+    min-width: 120px;
+  }
+
+  .result-bar select::-ms-expand {
+    display: none;
   }
 }

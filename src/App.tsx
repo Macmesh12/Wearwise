@@ -596,11 +596,25 @@ function BottomNav({
           onClick={() => go(item.page)}
           aria-label={item.label}
         >
-          <span className="bottom-nav-icon">
-            <Icon name={item.icon} size={20} />
-          </span>
-          {item.badge && item.badge > 0 && (
-            <span className="bottom-nav-badge">{item.badge}</span>
+          {item.label === "Shop" ? (
+            <img
+              className="bottom-nav-image"
+              src="/assets/images/shop.png"
+              alt="Shop"
+            />
+          ) : item.label === "Explore" ? (
+            <img
+              className="bottom-nav-image"
+              src="/assets/images/explore.png"
+              alt="Explore"
+            />
+          ) : (
+            <span className="bottom-nav-icon">
+              <Icon name={item.icon} size={20} />
+            </span>
+          )}
+          {item.label === "Shop" && (
+            <span className="bottom-nav-badge">{cartCount}</span>
           )}
           <span className="bottom-nav-label">{item.label}</span>
         </button>
@@ -790,7 +804,7 @@ function Shop({
         p.category.toLowerCase().includes(query.toLowerCase())),
   );
   return (
-    <div className="page">
+    <div className="page shop-page">
       {/*<div className="page-title">
         <span className="eyebrow">SHOP / ALL PRODUCTS</span>
         <h1>Wear the wise.</h1>
@@ -1790,17 +1804,19 @@ function Explore({ selectDesign }: { selectDesign: (d: Design) => void }) {
         </p>
       </div>
       <div className="explore-tools">
-        <div className="tag-row">
+        <Filter title="Categories">
           {["All", "Anime", "Ghana", "Street", "Type", "Minimal"].map((x) => (
-            <button
-              className={tag === x ? "active" : ""}
-              onClick={() => setTag(x)}
-              key={x}
-            >
-              {x}
-            </button>
+            <label className="check" key={x}>
+              <input
+                type="radio"
+                name="explore-category"
+                checked={tag === x}
+                onChange={() => setTag(x)}
+              />
+              <span>{x}</span>
+            </label>
           ))}
-        </div>
+        </Filter>
         <div className="filter-search">
           <Icon name="search" />
           <input
