@@ -453,13 +453,6 @@ function App() {
           </nav>
           <div className="header-actions">
             <button
-              className="icon-btn menu-btn"
-              onClick={() => setMenuOpen(!menuOpen)}
-              aria-label="Menu"
-            >
-              <Icon name="menu" />
-            </button>
-            <button
               className="cart-btn"
               onClick={() => go("cart")}
               aria-label="Cart"
@@ -581,7 +574,7 @@ function BottomNav({
 }) {
   const navItems = [
     { label: "Home", page: "home" as Page, icon: "home" },
-    { label: "Shop", page: "shop" as Page, icon: "cart", badge: cartCount },
+    { label: "Shop", page: "shop" as Page, icon: "cart" },
     { label: "Explore", page: "explore" as Page, icon: "search" },
     { label: "Orders", page: "track" as Page, icon: "order" },
     { label: "Profile", page: "contact" as Page, icon: "user" },
@@ -599,22 +592,19 @@ function BottomNav({
           {item.label === "Shop" ? (
             <img
               className="bottom-nav-image"
-              src="/assets/images/shop.png"
+              src="./assets/images/shop.png"
               alt="Shop"
             />
           ) : item.label === "Explore" ? (
             <img
               className="bottom-nav-image"
-              src="/assets/images/explore.png"
+              src="./assets/images/explore.png"
               alt="Explore"
             />
           ) : (
             <span className="bottom-nav-icon">
               <Icon name={item.icon} size={20} />
             </span>
-          )}
-          {item.label === "Shop" && (
-            <span className="bottom-nav-badge">{cartCount}</span>
           )}
           <span className="bottom-nav-label">{item.label}</span>
         </button>
@@ -770,8 +760,8 @@ function ProductCard({
         </span>
       </button>
       <button className="product-info" onClick={onClick}>
-        <span>{product.category}</span>
         <h3>{product.name}</h3>
+        <span>{product.category}</span>
         <strong>GHS {product.price.toLocaleString()}</strong>
       </button>
       {add && (

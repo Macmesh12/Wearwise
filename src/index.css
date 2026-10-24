@@ -398,7 +398,7 @@ em {
   transform: scale(1.025);
 }
 .stock {
-  position: absolute;
+  position: relative;
   top: 14px;
   left: 14px;
   background: var(--lime);
