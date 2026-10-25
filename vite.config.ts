@@ -3,8 +3,6 @@ import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "EXPO_PUBLIC_");
-  const adminMode = env.VITE_ADMIN_MODE === "true";
-
   return {
     plugins: [react()],
     define: {
@@ -14,11 +12,6 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(
         env.EXPO_PUBLIC_ANON_KEY,
       ),
-    },
-    build: {
-      rollupOptions: {
-        input: adminMode ? "public/admin.html" : "index.html",
-      },
     },
   };
 });
