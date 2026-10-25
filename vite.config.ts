@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
         env.EXPO_PUBLIC_SUPABASE_URL,
       ),
       "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(
-        env.EXPO_PUBLIC_ANON_KEY,
+        env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       ),
     },
   };
