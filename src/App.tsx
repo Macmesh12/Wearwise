@@ -93,6 +93,12 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M5 12h14M14 7l5 5-5 5" />
       </>
     ),
+    sort: (
+      <>
+        <path d="M3 9l4-4l4 4m-4-4v14" strokeLinecap="round" />
+        <path d="M21 15l-4 4l-4-4m4 4v-14" strokeLinecap="round" />
+      </>
+    ),
     plus: (
       <>
         <path d="M12 5v14M5 12h14" />
@@ -129,7 +135,10 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
     ),
     order: (
       <>
-        <path d="M16 11v7a4 4 0 0 1-8 0v-7M8 7l8 4 8-4M16 11v7" />
+        <path d="M3 7l9-3 9 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <path d="M7 12v4a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-4" />
+        <circle cx="7.5" cy="19" r="1" />
+        <circle cx="16.5" cy="19" r="1" />
       </>
     ),
     user: (
@@ -574,9 +583,9 @@ function BottomNav({
 }) {
   const navItems = [
     { label: "Home", page: "home" as Page, icon: "home" },
-    { label: "Shop", page: "shop" as Page, icon: "cart" },
-    { label: "Explore", page: "explore" as Page, icon: "search" },
-    { label: "Orders", page: "track" as Page, icon: "order" },
+    { label: "Explore", page: "explore" as Page, image: "/explore.png" },
+    { label: "Shop", page: "shop" as Page, image: "/shop.png" },
+    { label: "Orders", page: "track" as Page, image: "/orders.png" },
     { label: "Profile", page: "contact" as Page, icon: "user" },
   ];
 
@@ -589,23 +598,13 @@ function BottomNav({
           onClick={() => go(item.page)}
           aria-label={item.label}
         >
-          {item.label === "Shop" ? (
-            <img
-              className="bottom-nav-image"
-              src="./assets/images/shop.png"
-              alt="Shop"
-            />
-          ) : item.label === "Explore" ? (
-            <img
-              className="bottom-nav-image"
-              src="./assets/images/explore.png"
-              alt="Explore"
-            />
-          ) : (
-            <span className="bottom-nav-icon">
-              <Icon name={item.icon} size={20} />
-            </span>
-          )}
+          <span className="bottom-nav-icon">
+            {item.image ? (
+              <img src={item.image} alt={item.label} className="bottom-nav-image" />
+            ) : (
+              <Icon name={item.icon!} size={20} />
+            )}
+          </span>
           <span className="bottom-nav-label">{item.label}</span>
         </button>
       ))}
@@ -783,16 +782,53 @@ function Shop({
   const { products } = useCatalog();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All items");
+  const [sort, setSort] = useState<"newest" | "price-low" | "price-high">(
+    "newest",
+  );
+  const [isSortOpen, setIsSortOpen] = useState(false);
+
+  // Close sort menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (isSortOpen && !e.composedPath().includes(document.querySelector(".result-bar")!)) {
+        setIsSortOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSortOpen]);
+  const [shuffled, setShuffled] = useState<Product[]>([]);
   const categories = [
     "All items",
     ...Array.from(new Set(products.map((p) => p.category))),
   ];
-  const filtered = products.filter(
-    (p) =>
-      (category === "All items" || p.category === category) &&
-      (p.name.toLowerCase().includes(query.toLowerCase()) ||
-        p.category.toLowerCase().includes(query.toLowerCase())),
-  );
+
+  // Shuffle products whenever the catalogue (re)loads — refresh / new open
+  useEffect(() => {
+    if (products.length === 0) return;
+    const copy = [...products];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    setShuffled(copy);
+  }, [products]);
+
+  const source = shuffled.length > 0 ? shuffled : products;
+
+  const filtered = source
+    .filter(
+      (p) =>
+        (category === "All items" || p.category === category) &&
+        (p.name.toLowerCase().includes(query.toLowerCase()) ||
+          p.category.toLowerCase().includes(query.toLowerCase())),
+    )
+    .sort((a, b) => {
+      if (sort === "price-low") return a.price - b.price;
+      if (sort === "price-high") return b.price - a.price;
+      return 0;
+    });
+
   return (
     <div className="page shop-page">
       {/*<div className="page-title">
@@ -827,7 +863,40 @@ function Shop({
         </aside>
         <section className="shop-results">
           <div className="result-bar">
-            <span>Featured Products</span>
+            <button
+              className="sort-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsSortOpen(!isSortOpen);
+              }}
+              aria-label="Sort products"
+            >
+              <img src="/sort.png" alt="Sort" className="sort-icon" />
+              <span>{sort === "newest" ? "Newest first" : sort === "price-low" ? "Lowest price first" : "Highest price first"}</span>
+              <Icon name="arrow" size={14} />
+            </button>
+            {isSortOpen && (
+              <div className="sort-menu">
+                <button
+                  className={`sort-option${sort === "newest" ? " active" : ""}`}
+                  onClick={() => { setSort("newest"); setIsSortOpen(false); }}
+                >
+                  Newest first
+                </button>
+                <button
+                  className={`sort-option${sort === "price-low" ? " active" : ""}`}
+                  onClick={() => { setSort("price-low"); setIsSortOpen(false); }}
+                >
+                  Lowest price first
+                </button>
+                <button
+                  className={`sort-option${sort === "price-high" ? " active" : ""}`}
+                  onClick={() => { setSort("price-high"); setIsSortOpen(false); }}
+                >
+                  Highest price first
+                </button>
+              </div>
+            )}
           </div>
           <div className="product-grid">
             {filtered.map((p) => (
