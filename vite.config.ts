@@ -1,6 +1,5 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
-import path from "path";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "EXPO_PUBLIC_");
@@ -18,9 +17,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
-        input: adminMode
-          ? path.resolve(__dirname, "public/admin.html")
-          : path.resolve(__dirname, "index.html"),
+        input: adminMode ? "public/admin.html" : "index.html",
       },
     },
   };
