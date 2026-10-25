@@ -10,6 +10,14 @@ if ("serviceWorker" in navigator) {
 
 const AdminMode = import.meta.env.VITE_ADMIN_MODE === "true";
 
+// Inject correct PWA manifest based on environment
+if (typeof document !== "undefined") {
+  const manifestLink = document.createElement("link");
+  manifestLink.rel = "manifest";
+  manifestLink.href = AdminMode ? "/manifest.webmanifest" : "/client-manifest.webmanifest";
+  document.head.appendChild(manifestLink);
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {AdminMode ? <Admin onExit={() => {}} /> : <App />}
