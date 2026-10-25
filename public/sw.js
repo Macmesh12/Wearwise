@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title ?? "WearWise", {
       body: data.body ?? "You have a new store update.",
-      icon: "/pwa-icon.svg",
-      badge: "/pwa-icon.svg",
+      icon: "/admin-pwa-icon.png",
+      badge: "/admin-pwa-icon.png",
       data: { url: data.url ?? "/admin" },
     }),
   );
