@@ -897,6 +897,12 @@ function Shop({
                 >
                   Lowest price first
                 </button>
+<button
+                  className={`sort-option${sort === "random" ? " active" : ""}`}
+                  onClick={() => { setSort("random"); setIsSortOpen(false); }}
+                >
+                  Random
+                </button>
                 <button
                   className={`sort-option${sort === "price-high" ? " active" : ""}`}
                   onClick={() => {
