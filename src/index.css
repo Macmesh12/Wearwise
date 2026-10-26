@@ -675,8 +675,17 @@ em {
 }
 .thumbs {
   display: flex;
-  flex-direction: column;
+  flex-wrap: nowrap;
   gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 10px;
+}
+.thumbs::-webkit-scrollbar {
+  display: none;
 }
 .thumbs button {
   border: 1px solid transparent;
@@ -684,13 +693,16 @@ em {
   padding: 0;
   border-radius: 10px;
   overflow: hidden;
-  height: 94px;
+  height: 100px;
+  flex-shrink: 0;
+  scroll-snap-align: start;
 }
 .thumbs button:first-child {
   border-color: var(--ink);
 }
 .thumbs img {
   height: 100%;
+  width: 100%;
   object-fit: cover;
 }
 .main-image {
@@ -748,16 +760,22 @@ em {
 .pill-row,
 .color-row {
   display: flex;
+  flex-wrap: nowrap;
   gap: 9px;
+  align-items: center;
 }
-.pill-row button {
-  width: 48px;
-  height: 43px;
+.pill-row button,
+.color-row button {
+  padding: 8px 14px;
+  border-radius: 9px;
+  font-size: 14px;
   border: 1px solid var(--gray-2);
   background: var(--white);
-  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
 }
-.pill-row button.selected {
+.pill-row button.selected,
+.color-row button.selected {
   background: var(--ink);
   color: var(--white);
 }
