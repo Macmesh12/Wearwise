@@ -519,12 +519,10 @@ function App() {
               count={cartCount}
               setCount={(nextCount) => {
                 setCartCount(nextCount);
-                setDiscount(null);
               }}
               clearCart={() => {
                 setCartCount(0);
                 setSelectedProduct(null);
-                setDiscount(null);
               }}
               discount={discount}
               onDiscountApplied={setDiscount}
