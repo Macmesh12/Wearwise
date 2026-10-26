@@ -256,7 +256,7 @@ function Admin({ onExit }: { onExit: () => void }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pushStatus, setPushStatus] = useState("");
-  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
 
   useEffect(() => {
     let active = true;
