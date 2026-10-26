@@ -858,6 +858,11 @@ em {
   font-size: 12px;
   margin: 0 0 15px;
 }
+.clear-cart-btn {
+  display: block;
+  margin: 0 0 20px;
+  width: fit-content;
+}
 .remove {
   border: 0;
   background: none;

@@ -521,6 +521,11 @@ function App() {
                 setCartCount(nextCount);
                 setDiscount(null);
               }}
+              clearCart={() => {
+                setCartCount(0);
+                setSelectedProduct(null);
+                setDiscount(null);
+              }}
               discount={discount}
               onDiscountApplied={setDiscount}
             />
@@ -1078,6 +1083,7 @@ function Cart({
   product,
   count,
   setCount,
+  clearCart,
   discount,
   onDiscountApplied,
 }: {
@@ -1085,6 +1091,7 @@ function Cart({
   product: Product | null;
   count: number;
   setCount: (count: number) => void;
+  clearCart: () => void;
   discount: AppliedDiscount | null;
   onDiscountApplied: (discount: AppliedDiscount | null) => void;
 }) {
@@ -1142,6 +1149,15 @@ function Cart({
             </div>
           ))}
           {items.length === 0 && <p>Your cart is empty.</p>}
+          {items.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={clearCart}
+              className="clear-cart-btn"
+            >
+              <Icon name="close" size={14} /> Clear Cart
+            </Button>
+          )}
         </div>
         <aside className="summary">
           <h2>Order summary</h2>
