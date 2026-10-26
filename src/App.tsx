@@ -21,7 +21,7 @@ type Page =
   | "admin";
 
 const photos = {
-  hero: "https://images.unsplash.com/photo-1766149756155-4a8122ad0732?auto=format&fit=crop&w=1400&q=85",
+  hero: "/hero.jpg",
   black:
     "https://images.unsplash.com/photo-1761637316697-c7f4e4d7b49f?auto=format&fit=crop&w=900&q=85",
   seated:
@@ -605,7 +605,11 @@ function BottomNav({
         >
           <span className="bottom-nav-icon">
             {item.image ? (
-              <img src={item.image} alt={item.label} className="bottom-nav-image" />
+              <img
+                src={item.image}
+                alt={item.label}
+                className="bottom-nav-image"
+              />
             ) : (
               <Icon name={item.icon!} size={20} />
             )}
@@ -787,15 +791,18 @@ function Shop({
   const { products } = useCatalog();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All items");
-  const [sort, setSort] = useState<"newest" | "price-low" | "price-high">(
-    "newest",
+  const [sort, setSort] = useState<"random" | "price-low" | "price-high">(
+    "random",
   );
   const [isSortOpen, setIsSortOpen] = useState(false);
 
   // Close sort menu when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (isSortOpen && !e.composedPath().includes(document.querySelector(".result-bar")!)) {
+      if (
+        isSortOpen &&
+        !e.composedPath().includes(document.querySelector(".result-bar")!)
+      ) {
         setIsSortOpen(false);
       }
     }
@@ -867,7 +874,8 @@ function Shop({
           </Filter>
         </aside>
         <section className="shop-results">
-          <div className="result-bar">
+          {/* <div className="result-bar">
+            <div className="featured-product">Featured Product</div>
             <button
               className="sort-btn"
               onClick={(e) => {
@@ -877,32 +885,30 @@ function Shop({
               aria-label="Sort products"
             >
               <img src="/sort.png" alt="Sort" className="sort-icon" />
-              <span>{sort === "newest" ? "Newest first" : sort === "price-low" ? "Lowest price first" : "Highest price first"}</span>
-              <Icon name="arrow" size={14} />
             </button>
             {isSortOpen && (
               <div className="sort-menu">
                 <button
-                  className={`sort-option${sort === "newest" ? " active" : ""}`}
-                  onClick={() => { setSort("newest"); setIsSortOpen(false); }}
-                >
-                  Newest first
-                </button>
-                <button
                   className={`sort-option${sort === "price-low" ? " active" : ""}`}
-                  onClick={() => { setSort("price-low"); setIsSortOpen(false); }}
+                  onClick={() => {
+                    setSort("price-low");
+                    setIsSortOpen(false);
+                  }}
                 >
                   Lowest price first
                 </button>
                 <button
                   className={`sort-option${sort === "price-high" ? " active" : ""}`}
-                  onClick={() => { setSort("price-high"); setIsSortOpen(false); }}
+                  onClick={() => {
+                    setSort("price-high");
+                    setIsSortOpen(false);
+                  }}
                 >
                   Highest price first
                 </button>
               </div>
             )}
-          </div>
+          </div>*/}
           <div className="product-grid">
             {filtered.map((p) => (
               <ProductCard
@@ -1136,7 +1142,7 @@ function Cart({
                 <h3>{p.name}</h3>
                 <p>Choose options at checkout</p>
                 <div className="qty small">
-                  <button onClick={() => setCount(Math.max(1, count - 1))}>
+                  <button onClick={() => setCount(Math.max(0, count - 1))}>
                     <Icon name="minus" />
                   </button>
                   <span>{count}</span>
@@ -1899,7 +1905,7 @@ function Explore({ selectDesign }: { selectDesign: (d: Design) => void }) {
       </div>
       <div className="masonry">
         {shown.map((d, i) => (
-          <article className={`design-card d${i % 3}`} key={d.code}>
+          <article className={`design-card d${i % 2}`} key={d.code}>
             <button className="design-image" onClick={() => selectDesign(d)}>
               <img src={d.image} alt={d.name} />
               <span className="request-hover">
