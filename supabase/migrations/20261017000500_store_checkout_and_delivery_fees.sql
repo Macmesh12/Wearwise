@@ -146,13 +146,7 @@ begin
     p_quantity, selected_item.price, unit_cost
   );
 
-  if selected_item.stock_quantity is not null then
-    update public.store_items set stock_quantity = stock_quantity - p_quantity,
-      updated_at = now() where id = selected_item.id;
-  end if;
-  insert into public.store_inventory_reservations (order_id, store_item_id, quantity, stock_deducted)
-    values (new_order.id, selected_item.id, p_quantity, selected_item.stock_quantity is not null);
-
+  -- No stock is deducted here. Stock is deducted only when payment is confirmed (see commit_store_inventory_on_payment trigger).
   return jsonb_build_object(
     'order_id', new_order.id,
     'order_code', new_order.order_code,
@@ -208,18 +202,21 @@ set search_path = public
 as $$
 begin
   if new.payment_status = 'paid' and old.payment_status is distinct from new.payment_status then
-    update public.store_inventory_reservations set status = 'committed', updated_at = now()
-      where order_id = new.id and status = 'reserved';
+    -- Deduct the ordered quantity from each product's stock_quantity
+    update public.store_items si
+    set stock_quantity = si.stock_quantity - oi.quantity,
+        updated_at = now()
+    from public.order_items oi
+    where si.id = oi.store_item_id
+      and oi.order_id = new.id
+      and oi.quantity is not null;
   end if;
   return new;
 end;
 $$;
+
 drop trigger if exists commit_store_inventory_on_payment_trigger on public.orders;
 create trigger commit_store_inventory_on_payment_trigger
   after update of payment_status on public.orders
   for each row execute function public.commit_store_inventory_on_payment();
 
-revoke all on function public.create_store_purchase(uuid, integer, text, text, text, text, text, text, text, text, text) from public, anon, authenticated;
-grant execute on function public.create_store_purchase(uuid, integer, text, text, text, text, text, text, text, text, text) to service_role;
-revoke all on function public.restore_unpaid_store_inventory() from public, anon, authenticated;
-revoke all on function public.commit_store_inventory_on_payment() from public, anon, authenticated;

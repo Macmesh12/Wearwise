@@ -120,12 +120,8 @@ begin
     p_quantity, selected_item.price, unit_cost
   );
 
-  if selected_item.stock_quantity is not null then
-    update public.store_items set stock_quantity = stock_quantity - p_quantity,
-      updated_at = now() where id = selected_item.id;
-  end if;
-  insert into public.store_inventory_reservations (order_id, store_item_id, quantity, stock_deducted)
-    values (new_order.id, selected_item.id, p_quantity, selected_item.stock_quantity is not null);
+  -- No stock is deducted here. Stock is deducted only when payment is confirmed (see commit_store_inventory_on_payment trigger).
+  -- The order is kept for Paystack checkout reference; stock deduction happens after payment settles.
 
   return jsonb_build_object(
     'order_id', new_order.id,

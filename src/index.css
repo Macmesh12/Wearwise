@@ -2709,7 +2709,6 @@ footer {
   }
 }
 
-
 @media (max-width: 720px) {
   .button-row .btn {
     flex: 0 0 auto;
@@ -2718,18 +2717,18 @@ footer {
     font-size: 12px;
   }
 }
- @media (max-width: 720px) {
-   .section-head {
-     flex-direction: column;
-     align-items: flex-start;
-     gap: 12px;
-   }
-   .section-head h2 {
-     width: 100%;
-     font-size: 18px;
-   }
-   .section-head .text-link {
-     width: 100%;
-     justify-content: flex-start;
-   }
+@media (max-width: 720px) {
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .section-head h2 {
+    width: 100%;
+    font-size: 18px;
+  }
+  .section-head .text-link {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
