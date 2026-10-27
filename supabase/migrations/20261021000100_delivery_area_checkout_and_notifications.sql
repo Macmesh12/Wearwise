@@ -36,12 +36,7 @@ begin
   if coalesce(length(trim(p_customer_name)), 0) < 2 or coalesce(length(trim(p_customer_phone)), 0) < 7 then
     raise exception 'Enter your name and a valid phone number.';
   end if;
-  if p_delivery_method not in ('campus_handoff', 'sister_office_handoff', 'courier', 'other') then
-    raise exception 'Choose one of the available delivery methods.';
-  end if;
-  if p_delivery_method in ('courier', 'other') and coalesce(length(trim(p_delivery_address)), 0) = 0 then
-    raise exception 'Enter the address for delivery.';
-  end if;
+  -- Delivery method removed — only campus/sister office handoff with free delivery
 
   select * into selected_item from public.store_items
     where id = p_item_id and is_published and is_available
@@ -78,19 +73,8 @@ begin
     ) into area_is_free;
   end if;
 
-  if area_is_free then
-    chosen_fee := 0;
-  elsif area_found and p_delivery_method in ('courier', 'other') then
-    chosen_fee := selected_area.fee;
-  else
-    chosen_fee := case p_delivery_method
-      when 'campus_handoff' then fee_settings.campus_handoff_fee
-      when 'sister_office_handoff' then fee_settings.sister_office_handoff_fee
-      when 'courier' then fee_settings.courier_fee
-      else fee_settings.other_fee
-    end;
-  end if;
-  if chosen_fee is null then raise exception 'This delivery option is not available yet. Please contact WearWise.'; end if;
+  -- Delivery method removed — free delivery for all orders
+  chosen_fee := 0;
 
   select case when c.purchase_cost is not null and c.other_cost is not null
     then c.purchase_cost + c.other_cost else null end

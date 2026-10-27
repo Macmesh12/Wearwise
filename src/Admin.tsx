@@ -126,8 +126,6 @@ type PaymentRow = {
 type DeliverySettings = {
   campus_handoff_fee: number | string;
   sister_office_handoff_fee: number | string;
-  courier_fee: number | string | null;
-  other_fee: number | string | null;
   free_delivery_areas: string[];
 };
 type StoreSettings = {
@@ -356,7 +354,7 @@ function Admin({ onExit }: { onExit: () => void }) {
         supabase
           .from("store_delivery_settings")
           .select(
-            "campus_handoff_fee,sister_office_handoff_fee,courier_fee,other_fee,free_delivery_areas",
+            "campus_handoff_fee,sister_office_handoff_fee,free_delivery_areas",
           )
           .eq("singleton", true)
           .maybeSingle(),
@@ -514,9 +512,29 @@ function Admin({ onExit }: { onExit: () => void }) {
           ? cause.message
           : "Could not enable notifications.",
       );
+      setPushEnabled(false);
     }
     window.setTimeout(() => setPushStatus(""), 5000);
   }
+
+  // Auto-enable push notifications on load (default is on)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!pushEnabled) return;
+      await new Promise((r) => setTimeout(r, 500));
+      if (!active) return;
+      try {
+        await enablePushNotifications();
+        setPushStatus("Phone notifications enabled");
+      } catch {
+        setPushEnabled(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pushEnabled]);
 
   async function openNotification(notification: AdminNotification) {
     await supabase

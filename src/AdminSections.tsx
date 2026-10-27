@@ -145,8 +145,6 @@ type Payment = {
 type Delivery = {
   campus_handoff_fee: number | string;
   sister_office_handoff_fee: number | string;
-  courier_fee: number | string | null;
-  other_fee: number | string | null;
   free_delivery_areas: string[];
 } | null;
 type DeliveryArea = {
@@ -3181,8 +3179,6 @@ function DeliveryPage({
       return;
     }
     const deliveryValues = {
-      courier_fee: number("courier"),
-      other_fee: number("other"),
       free_delivery_areas: areas
         .filter((a) => a.free_delivery && a.status === "active")
         .map((a) => a.area),
@@ -3287,19 +3283,6 @@ function DeliveryPage({
               defaultValue={settings?.delivery_max_days ?? 2}
             />
             <span>days</span>
-          </div>
-        </label>
-        <label>
-          Courier{" "}
-          <div>
-            <span>GHS</span>
-            <input
-              name="courier"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={value?.courier_fee ?? ""}
-            />
           </div>
         </label>
         <button

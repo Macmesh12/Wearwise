@@ -78,12 +78,7 @@ begin
   if coalesce(length(trim(p_customer_name)), 0) < 2 or coalesce(length(trim(p_customer_phone)), 0) < 7 then
     raise exception 'Enter your name and a valid phone number.';
   end if;
-  if p_delivery_method not in ('campus_handoff', 'sister_office_handoff', 'courier', 'other') then
-    raise exception 'Choose one of the available delivery methods.';
-  end if;
-  if p_delivery_method = 'courier' and coalesce(length(trim(p_delivery_address)), 0) = 0 then
-    raise exception 'Enter the address for courier delivery.';
-  end if;
+  -- Delivery method removed — only campus/sister office handoff with free delivery
 
   select * into selected_item from public.store_items
     where id = p_item_id and is_published and is_available

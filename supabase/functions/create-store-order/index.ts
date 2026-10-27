@@ -76,7 +76,6 @@ Deno.serve(async (request) => {
   const customerName = cleanText(customer.name, 120);
   const customerPhone = cleanText(customer.phone, 40);
   const customerEmail = cleanText(customer.email, 160).toLowerCase();
-  const deliveryMethod = cleanText(delivery.method, 40);
   const deliveryRegion = cleanText(delivery.region, 120);
 
   if (!/^[0-9a-f-]{36}$/i.test(itemId))
@@ -93,9 +92,7 @@ Deno.serve(async (request) => {
       error: "Enter a valid email address for your payment receipt.",
     });
   }
-  if (!["courier", "other"].includes(deliveryMethod)) {
-    return jsonResponse(400, { error: "Choose one of the delivery methods." });
-  }
+
 
   const { data, error } = await admin.rpc("create_store_purchase_with_area", {
     p_item_id: itemId,
@@ -105,7 +102,7 @@ Deno.serve(async (request) => {
     p_customer_name: customerName,
     p_customer_phone: customerPhone,
     p_customer_email: customerEmail,
-    p_delivery_method: deliveryMethod,
+    p_delivery_method: "campus_handoff",
     p_delivery_region: deliveryRegion,
     p_delivery_area: cleanText(delivery.area, 120),
     p_delivery_address: cleanText(delivery.address, 500),
@@ -123,56 +120,44 @@ Deno.serve(async (request) => {
   }
 
   if (discountCode) {
-    const { data: discount, error: discountError } = await admin
-      .from("discounts")
-      .select(
-        "id,code,type,value,max_cap,start_date,end_date,total_limit,per_customer_limit,min_order_amount,applies_to,used_count",
-      )
-      .eq("code", discountCode)
-      .maybeSingle();
-    const now = new Date();
-    const subtotal = Number(data.subtotal ?? 0);
-    const valid =
-      discount &&
-      discount.status === "active" &&
-      ["shop", "both"].includes(discount.applies_to) &&
-      (!discount.start_date || new Date(discount.start_date) <= now) &&
-      (!discount.end_date || new Date(discount.end_date) >= now) &&
-      subtotal >= Number(discount.min_order_amount) &&
-      (discount.total_limit === null ||
-        discount.used_count < discount.total_limit);
-    if (discountError || !valid) {
+    // Validate discount using the same RPC as the cart for consistency
+    const { data: discountPreview, error: previewError } = await admin.rpc(
+      "preview_store_discount",
+      { p_code: discountCode, p_subtotal: Number(data.subtotal ?? 0) }
+    );
+    if (previewError || !discountPreview) {
       return jsonResponse(400, {
         error: "This discount code is not currently valid.",
       });
     }
-    if (discount.per_customer_limit) {
+
+    // Check per-customer limit (not covered by preview_store_discount)
+    const discountId = discountPreview.id;
+    const { data: discountRow, error: discountRowError } = await admin
+      .from("discounts")
+      .select("per_customer_limit")
+      .eq("id", discountId)
+      .maybeSingle();
+    if (discountRow?.per_customer_limit) {
       const { count, error: redemptionError } = await admin
         .from("discount_redemptions")
         .select("id", { count: "exact", head: true })
-        .eq("discount_id", discount.id)
+        .eq("discount_id", discountId)
         .eq("customer_phone", customerPhone);
-      if (redemptionError || (count ?? 0) >= discount.per_customer_limit) {
+      if (redemptionError || (count ?? 0) >= discountRow.per_customer_limit) {
         return jsonResponse(400, {
           error: "This discount code has reached its customer limit.",
         });
       }
     }
-    const discountAmount = Math.min(
-      discount.max_cap === null ? subtotal : Number(discount.max_cap),
-      discount.type === "percentage"
-        ? (subtotal * Number(discount.value)) / 100
-        : Number(discount.value),
-    );
+
+    const discountAmount = Math.max(0, Number(discountPreview.amount ?? 0));
     const { error: updateError } = await admin
       .from("orders")
       .update({
-        discount_id: discount.id,
-        discount_amount: Math.max(0, discountAmount),
-        total_amount: Math.max(
-          0,
-          Number(data.total_amount) - Math.max(0, discountAmount),
-        ),
+        discount_id: discountId,
+        discount_amount: discountAmount,
+        total_amount: Math.max(0, Number(data.total_amount) - discountAmount),
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.order_id);
@@ -180,12 +165,9 @@ Deno.serve(async (request) => {
       return jsonResponse(400, {
         error: "The discount could not be applied to this order.",
       });
-    data.discount_id = discount.id;
-    data.discount_amount = Math.max(0, discountAmount);
-    data.total_amount = Math.max(
-      0,
-      Number(data.total_amount) - Math.max(0, discountAmount),
-    );
+    data.discount_id = discountId;
+    data.discount_amount = discountAmount;
+    data.total_amount = Math.max(0, Number(data.total_amount) - discountAmount);
   }
 
   return jsonResponse(201, { ok: true, ...data });

@@ -1242,8 +1242,7 @@ function Checkout({
 }) {
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState<{
-    courier_fee: number | string | null;
-    other_fee: number | string | null;
+    campus_handoff_fee: number | string | null;
     free_delivery_areas: string[];
   } | null>(null);
   const [areas, setAreas] = useState<
@@ -1258,7 +1257,6 @@ function Checkout({
   const [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
     [email, setEmail] = useState("");
-  const [method, setMethod] = useState<"courier" | "other">("courier");
   const [region, setRegion] = useState(""),
     [areaId, setAreaId] = useState(""),
     [areaText, setAreaText] = useState(""),
@@ -1273,7 +1271,7 @@ function Checkout({
     void Promise.all([
       supabase
         .from("store_delivery_settings")
-        .select("courier_fee,other_fee,free_delivery_areas")
+        .select("campus_handoff_fee,free_delivery_areas")
         .eq("singleton", true)
         .maybeSingle(),
       supabase
@@ -1310,12 +1308,10 @@ function Checkout({
   const deliveryFee = useMemo(() => {
     if (area?.free_delivery || legacyFree) return 0;
     if (!settings) return null;
-    if ((method === "courier" || method === "other") && area)
-      return Number(area.fee);
-    const raw =
-      method === "courier" ? settings.courier_fee : settings.other_fee;
+    if (area) return Number(area.fee);
+    const raw = settings.campus_handoff_fee;
     return raw == null ? null : Number(raw);
-  }, [area, legacyFree, method, settings]);
+  }, [area, legacyFree, settings]);
   const discountAmount = Number(discount?.amount ?? 0);
   const total = Math.max(0, subtotal + (deliveryFee ?? 0) - discountAmount);
   const chosenArea = area?.area ?? areaText.trim();
@@ -1335,19 +1331,12 @@ function Checkout({
       setError("Enter a valid email for your Paystack receipt.");
       return;
     }
-    if (
-      (method === "courier" || method === "other") &&
-      (!chosenArea || !address.trim())
-    ) {
+    if (!chosenArea || !address.trim()) {
       setStep(2);
       setError("Choose a delivery area and enter your delivery address.");
       return;
     }
-    if (
-      (method === "courier" || method === "other") &&
-      areas.length > 0 &&
-      !area
-    ) {
+    if (areas.length > 0 && !area) {
       setStep(2);
       setError("Choose one of the active delivery areas.");
       return;
@@ -1355,7 +1344,7 @@ function Checkout({
     if (deliveryFee === null) {
       setStep(2);
       setError(
-        "This delivery method is not currently available. Contact WearWise for help.",
+        "Delivery price is not currently available. Contact WearWise for help.",
       );
       return;
     }
@@ -1379,7 +1368,7 @@ function Checkout({
               discountCode: discount?.code ?? "",
               customer: { name, phone, email },
               delivery: {
-                method,
+                method: "campus_handoff",
                 region,
                 area: chosenArea,
                 address,
@@ -1533,52 +1522,12 @@ function Checkout({
                 onChange={setAreaText}
               />
             )}
-            <div className="delivery-methods">
-              {(
-                [
-                  ["courier", "Courier delivery"],
-                  ["other", "Other"],
-                ] as const
-              ).map(([v, label]) => {
-                const fee =
-                  area?.free_delivery || legacyFree
-                    ? 0
-                    : v === "courier" || v === "other"
-                      ? area
-                        ? Number(area.fee)
-                        : settings?.[
-                            v === "courier" ? "courier_fee" : "other_fee"
-                          ]
-                      : v === "courier"
-                        ? settings?.courier_fee
-                        : settings?.other_fee;
-                const disabled = fee == null;
-                return (
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    className={method === v ? "selected" : ""}
-                    onClick={() => setMethod(v)}
-                    key={v}
-                  >
-                    <span>{label}</span>
-                    <b>
-                      {disabled
-                        ? "Unavailable"
-                        : `GHS ${Number(fee).toFixed(2)}`}
-                    </b>
-                  </button>
-                );
-              })}
-            </div>
-            {method === "courier" || method === "other" ? (
-              <Field
-                label="Delivery address / landmark"
-                placeholder="House, street, Ghana Post GPS"
-                value={address}
-                onChange={setAddress}
-              />
-            ) : null}
+            <Field
+              label="Delivery address / landmark"
+              placeholder="House, street, Ghana Post GPS"
+              value={address}
+              onChange={setAddress}
+            />
             <Field
               label="Delivery instructions (optional)"
               placeholder="Anything the delivery person should know"
@@ -1589,18 +1538,14 @@ function Checkout({
               <span>Delivery fee</span>
               <strong>
                 {deliveryFee === null
-                  ? "Choose a method"
+                  ? "Choose an area"
                   : `GHS ${deliveryFee.toFixed(2)}`}
               </strong>
             </div>
             <Button
               className="wide"
               onClick={() => {
-                if (
-                  (method === "courier" || method === "other") &&
-                  areas.length &&
-                  !area
-                ) {
+                if (areas.length && !area) {
                   setError("Choose an area first.");
                   return;
                 }
@@ -1649,7 +1594,7 @@ function Checkout({
             </div>
             <p>
               Deliver to {name} · {chosenArea || "handoff"} ·{" "}
-              {method.replaceAll("_", " ")}
+              {"Campus handoff"}
             </p>
             {error && (
               <p className="checkout-error" role="alert">
@@ -2021,7 +1966,6 @@ function RequestForm({
     [email, setEmail] = useState(""),
     [area, setArea] = useState(""),
     [address, setAddress] = useState(""),
-    [method, setMethod] = useState("courier"),
     [notes, setNotes] = useState(""),
     [artwork, setArtwork] = useState<File | null>(null);
   const [loading, setLoading] = useState(true),
@@ -2087,7 +2031,7 @@ function RequestForm({
         rushDaysEarly: 0,
         customization: { printPlacement: "front", customText: "" },
         customer: { name, phone, email },
-        delivery: { method, area, address, instructions: "" },
+        delivery: { method: "campus_handoff", area, address, instructions: "" },
       }),
     );
     form.append("website", "");
@@ -2256,18 +2200,6 @@ function RequestForm({
                 value={email}
                 onChange={setEmail}
               />
-              <label className="field">
-                <span>Delivery method</span>
-                <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                >
-                  <option value="courier">Courier</option>
-                  <option value="campus_handoff">Campus handoff</option>
-                  <option value="sister_office_handoff">Office handoff</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
               <Field
                 label="Region / area"
                 placeholder="e.g. Greater Accra, Osu"

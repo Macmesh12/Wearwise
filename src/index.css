@@ -763,6 +763,16 @@ em {
   flex-wrap: nowrap;
   gap: 9px;
   align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  padding-bottom: 6px;
+}
+.pill-row::-webkit-scrollbar,
+.color-row::-webkit-scrollbar {
+  display: none;
 }
 .pill-row button,
 .color-row button {
@@ -773,6 +783,8 @@ em {
   background: var(--white);
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
+  scroll-snap-align: start;
 }
 .pill-row button.selected,
 .color-row button.selected {
