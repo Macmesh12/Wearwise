@@ -761,6 +761,13 @@ function ProductCard({
   add?: () => void;
 }) {
   const [isAdded, setIsAdded] = useState(false);
+  const displayImage = useMemo(
+    () =>
+      product.images.length > 1
+        ? product.images[Math.floor(Math.random() * product.images.length)]
+        : product.images[0],
+    [product.images]
+  );
   const handleAdd = () => {
     add?.();
     setIsAdded(true);
@@ -769,7 +776,7 @@ function ProductCard({
   return (
     <article className="product-card">
       <button className="product-image" onClick={onClick}>
-        <img src={product.images[0] || ""} alt={product.name} />
+        <img src={displayImage || ""} alt={product.name} />
         <span className={`stock ${product.stock === "Low stock" ? "low" : ""}`}>
           {product.stock}
         </span>
@@ -984,6 +991,10 @@ function ProductDetail({
     setIsAdded(true);
     window.setTimeout(() => setIsAdded(false), 3000);
   };
+  const handleColorSelect = (x: string, idx: number) => {
+    setColor(x);
+    setActiveImage(idx);
+  };
   return (
     <div className="page">
       <button className="back-link" onClick={() => go("shop")}>
@@ -991,19 +1002,32 @@ function ProductDetail({
       </button>
       <div className="detail-layout">
         <div className="gallery">
-          <div className="thumbs">
-            {product.images.map((img, i) => (
+          <button
+            className="gallery-nav prev"
+            onClick={() => setActiveImage((i) => (i - 1 + product.images.length) % product.images.length)}
+            aria-label="Previous image"
+          >
+            <Icon name="arrow" />
+          </button>
+          <div className="main-image">
+            <img src={product.images[activeImage] || ""} alt={product.name} />
+          </div>
+          <button
+            className="gallery-nav next"
+            onClick={() => setActiveImage((i) => (i + 1) % product.images.length)}
+            aria-label="Next image"
+          >
+            <Icon name="arrow" />
+          </button>
+          <div className="image-dots">
+            {product.images.map((_, i) => (
               <button
                 key={i}
                 className={activeImage === i ? "active" : ""}
                 onClick={() => setActiveImage(i)}
-              >
-                <img src={img} alt="" />
-              </button>
+                aria-label={`Image ${i + 1}`}
+              />
             ))}
-          </div>
-          <div className="main-image">
-            <img src={product.images[activeImage] || ""} alt={product.name} />
           </div>
         </div>
         <div className="detail-copy">
@@ -1034,11 +1058,11 @@ function ProductDetail({
           {product.colorOptions.length > 0 && (
             <Option title="Colour">
               <div className="pill-row">
-                {product.colorOptions.map((x) => (
+                {product.colorOptions.map((x, idx) => (
                   <button
                     className={color === x ? "selected" : ""}
                     key={x}
-                    onClick={() => setColor(x)}
+                    onClick={() => handleColorSelect(x, idx)}
                   >
                     {x}
                   </button>
