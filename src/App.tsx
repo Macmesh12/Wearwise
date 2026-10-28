@@ -261,6 +261,7 @@ function App() {
   const [cartCount, setCartCount] = useState(0);
   const [cartSize, setCartSize] = useState("");
   const [cartColor, setCartColor] = useState("");
+  const [initialCategory, setInitialCategory] = useState<string | null>(null);
   const [discount, setDiscount] = useState<AppliedDiscount | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
@@ -395,7 +396,8 @@ function App() {
           : (pageTitles[page] ?? "WearWise | Ghanaian Streetwear");
   }, [page, selectedProduct, selectedDesign]);
 
-  const go = (next: Page) => {
+  const go = (next: Page, category?: string) => {
+    if (category) setInitialCategory(category);
     setPage(next);
     const targetPath =
       next === "admin"
@@ -499,6 +501,7 @@ function App() {
                 go("product");
               }}
               add={add}
+              initialCategory={initialCategory}
             />
           )}
           {page === "product" && selectedProduct && (
@@ -650,7 +653,7 @@ function Home({
   go,
   selectProduct,
 }: {
-  go: (p: Page) => void;
+  go: (p: Page, category?: string) => void;
   selectProduct: (p: Product) => void;
 }) {
   const { products } = useCatalog();
@@ -700,7 +703,7 @@ function Home({
             <button
               key={name}
               className={`category-card c${i}`}
-              onClick={() => go("shop")}
+              onClick={() => go("shop", name)}
             >
               <span>0{i + 1}</span>
               <strong>{name}</strong>
@@ -757,6 +760,12 @@ function ProductCard({
   onClick: () => void;
   add?: () => void;
 }) {
+  const [isAdded, setIsAdded] = useState(false);
+  const handleAdd = () => {
+    add?.();
+    setIsAdded(true);
+    window.setTimeout(() => setIsAdded(false), 3000);
+  };
   return (
     <article className="product-card">
       <button className="product-image" onClick={onClick}>
@@ -771,8 +780,12 @@ function ProductCard({
         <strong>GHS {product.price.toLocaleString()}</strong>
       </button>
       {add && (
-        <Button onClick={add}>
-          Add to cart <Icon name="plus" />
+        <Button onClick={handleAdd} variant={isAdded ? "outline" : "primary"}>
+          {isAdded ? "Added to cart ✓" : (
+            <>
+              Add to cart <Icon name="plus" />
+            </>
+          )}
         </Button>
       )}
     </article>
@@ -782,13 +795,15 @@ function ProductCard({
 function Shop({
   selectProduct,
   add,
+  initialCategory,
 }: {
   selectProduct: (p: Product) => void;
   add: (product: Product) => void;
+  initialCategory?: string | null;
 }) {
   const { products } = useCatalog();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("All items");
+  const [category, setCategory] = useState(initialCategory ?? "All items");
   const [sort, setSort] = useState<"random" | "price-low" | "price-high">(
     "random",
   );
@@ -963,6 +978,12 @@ function ProductDetail({
   const [size, setSize] = useState(product.sizeOptions[0] ?? "");
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
   const [activeImage, setActiveImage] = useState(0);
+  const [isAdded, setIsAdded] = useState(false);
+  const handleAdd = () => {
+    add(qty, size, color);
+    setIsAdded(true);
+    window.setTimeout(() => setIsAdded(false), 3000);
+  };
   return (
     <div className="page">
       <button className="back-link" onClick={() => go("shop")}>
@@ -1035,8 +1056,12 @@ function ProductDetail({
                 <Icon name="plus" />
               </button>
             </div>
-            <Button onClick={() => add(qty, size, color)} className="grow">
-              Add to cart — GHS {(product.price * qty).toLocaleString()}
+            <Button
+              onClick={handleAdd}
+              className="grow"
+              variant={isAdded ? "outline" : "primary"}
+            >
+              {isAdded ? "Added to cart ✓" : `Add to cart — GHS ${(product.price * qty).toLocaleString()}`}
             </Button>
           </div>
           <Button variant="outline" className="wide">
