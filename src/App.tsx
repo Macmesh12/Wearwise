@@ -250,6 +250,7 @@ function App() {
   const [designs, setDesigns] = useState<Design[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
   const [page, setPage] = useState<Page>(() =>
     window.location.pathname === "/admin"
       ? "admin"
@@ -274,6 +275,7 @@ function App() {
         setCatalogLoading(false);
         return;
       }
+      setCatalogLoading(true);
       const [itemResult, designResult] = await Promise.all([
         supabase
           .from("store_items")
@@ -358,7 +360,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [catalogReloadKey]);
 
   useEffect(() => {
     const onPopState = () =>
@@ -428,7 +430,13 @@ function App() {
     window.setTimeout(() => setToast(""), 1800);
   };
 
-  if (page === "admin") return <Admin onExit={() => go("home")} />;
+  if (page === "admin")
+    return (
+      <Admin
+        onExit={() => go("home")}
+        onCatalogRefresh={() => setCatalogReloadKey((k) => k + 1)}
+      />
+    );
   if (page === "payment-return") return <PaymentReturn go={go} />;
 
   return (
@@ -986,22 +994,63 @@ function ProductDetail({
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
   const [activeImage, setActiveImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(0);
+  const [touchStartY, setTouchStartY] = useState(0);
+
   const handleAdd = () => {
     add(qty, size, color);
     setIsAdded(true);
     window.setTimeout(() => setIsAdded(false), 3000);
   };
+
+  // Find the image index that corresponds to the selected color.
+  // colorOptions and image_paths are stored as parallel arrays from admin:
+  // colorOptions[i] pairs with image_paths[i] (magnet pairing).
+  const imageIndexForColor = (selectedColor: string): number => {
+    const idx = product.colorOptions.indexOf(selectedColor);
+    return idx >= 0 && idx < product.images.length ? idx : activeImage;
+  };
+
   const handleColorSelect = (x: string, idx: number) => {
     setColor(x);
-    setActiveImage(idx);
+    setActiveImage(imageIndexForColor(x));
   };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+    setTouchStartY(e.touches[0].clientY);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartX) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const diffX = endX - touchStartX;
+    const diffY = endY - touchStartY;
+    // Only treat as horizontal swipe if vertical movement is small
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 40) {
+      if (diffX > 0) {
+        // Swiped right → previous image
+        setActiveImage((i) => (i - 1 + product.images.length) % product.images.length);
+      } else {
+        // Swiped left → next image
+        setActiveImage((i) => (i + 1) % product.images.length);
+      }
+    }
+  };
+
   return (
     <div className="page">
       <button className="back-link" onClick={() => go("shop")}>
         ← Back to shop
       </button>
       <div className="detail-layout">
-        <div className="gallery">
+        <div
+          className="gallery"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={{ touchAction: "pan-y" }}
+        >
           <button
             className="gallery-nav prev"
             onClick={() => setActiveImage((i) => (i - 1 + product.images.length) % product.images.length)}
@@ -1061,7 +1110,7 @@ function ProductDetail({
                 {product.colorOptions.map((x, idx) => (
                   <button
                     className={color === x ? "selected" : ""}
-                    key={x}
+                    key={`${x}-${idx}`}
                     onClick={() => handleColorSelect(x, idx)}
                   >
                     {x}

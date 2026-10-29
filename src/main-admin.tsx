@@ -122,7 +122,7 @@ function AdminApp() {
 
   return (
     <CatalogContext.Provider value={{ products, designs }}>
-      <Admin onExit={() => {}} />
+      <Admin onExit={() => {}} onCatalogRefresh={() => {}} />
     </CatalogContext.Provider>
   );
 }

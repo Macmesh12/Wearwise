@@ -229,6 +229,7 @@ export default function AdminSections({
   page,
   data,
   onRefresh,
+  onCatalogRefresh,
   onDiscountSaved,
   onEnablePush,
   pushStatus,
@@ -237,6 +238,7 @@ export default function AdminSections({
   page: AdminPage;
   data: Data;
   onRefresh: () => void;
+  onCatalogRefresh: () => void;
   onDiscountSaved: (discount: Discount) => void;
   onEnablePush: () => void;
   pushStatus: string;
@@ -273,13 +275,14 @@ export default function AdminSections({
           say={say}
         />
       )}
-      {page === "products" && (
+{page === "products" && (
         <ProductsPage
           rows={data.products}
           variants={data.variants}
           designs={data.designs}
           categories={data.categories}
           onRefresh={onRefresh}
+          onCatalogRefresh={onCatalogRefresh}
           say={say}
         />
       )}
@@ -1625,6 +1628,7 @@ function ProductsPage({
   designs: GalleryDesign[];
   categories: Category[];
   onRefresh: () => void;
+  onCatalogRefresh: () => void;
   say: (s: string) => void;
 }) {
   const [editing, setEditing] = useState<StoreItem | null | false>(null);
@@ -1638,6 +1642,14 @@ function ProductsPage({
   const [globalCostPrice, setGlobalCostPrice] = useState("");
   const [globalStock, setGlobalStock] = useState("10");
   const [imagePathsToDelete, setImagePathsToDelete] = useState<string[]>([]);
+  // colorImageMap[i] = colour assigned to image_paths[i] (magnet pairing).
+  // Keeps colours and images aligned: reordering one reorders the other.
+  const [colorImageMap, setColorImageMap] = useState<string[]>([]);
+  // orderedImagePaths controls the visual + save order of images (magnet pairing
+  // with colorImageMap). Reordering here moves colours along with images.
+  const [orderedImagePaths, setOrderedImagePaths] = useState<string[]>([]);
+  // orderedSizeOptions preserves the user's preferred size order across edits.
+  const [orderedSizeOptions, setOrderedSizeOptions] = useState<string[]>([]);
   const current = editing && typeof editing === "object" ? editing : null;
   const visible = rows.filter(
     (r) =>
@@ -1672,12 +1684,35 @@ function ProductsPage({
               cost_price: String(item.purchase_cost ?? ""),
             })),
       );
+      // Initialize colour-image magnet map: pair each image with a colour.
+      // If fewer colours than images, repeat the last colour; if more colours
+      // than images, truncate to image count.
+      const existingColors = item.color_options ?? [];
+      const existingImages = item.image_paths ?? [];
+      const initMap: string[] = [];
+      for (let i = 0; i < existingImages.length; i++) {
+        initMap.push(existingColors[i] ?? existingColors[existingColors.length - 1] ?? "");
+      }
+      setColorImageMap(initMap);
+      setOrderedImagePaths([...existingImages]);
+      // Merge colours from variants with the colour-image map so the text
+      // input reflects ALL colours (no stale deleted / missing new ones).
+      const variantColors = [...new Set(saved.map((v) => v.color.trim()))];
+      const mapColors = [...new Set(initMap.filter((c) => c.trim()))];
+      const allColors = [...new Set([...variantColors, ...mapColors])];
+      setColors(allColors.join(", "));
+      // Initialize size order from the product's existing size_options.
+      const existingSizes = item.size_options ?? [];
+      setOrderedSizeOptions([...existingSizes]);
     } else {
       setSizes("S, M, L");
       setColors("Black");
       setGlobalSellingPrice("");
       setGlobalCostPrice("");
       setGlobalStock("10");
+      setColorImageMap([]);
+      setOrderedSizeOptions([]);
+      setOrderedImagePaths([]);
       setDrafts([
         {
           size: "S",
@@ -1725,8 +1760,14 @@ function ProductsPage({
     const validVariants = drafts.filter((v) => v.size.trim() && v.color.trim());
     const price = Number(validVariants[0]?.selling_price),
       stock = validVariants.reduce((sum, v) => sum + Number(v.stock || 0), 0);
+    // Use the user-arranged order (orderedImagePaths) when editing, falling
+    // back to the stored image_paths for brand-new items.
     const existingPaths =
-      editing && typeof editing === "object" ? [...editing.image_paths] : [];
+      orderedImagePaths.length > 0
+        ? [...orderedImagePaths]
+        : editing && typeof editing === "object"
+          ? [...editing.image_paths]
+          : [];
     const pathsToKeep = existingPaths.filter((p) => !imagePathsToDelete.includes(p));
     if (imagePathsToDelete.length) {
       const { error: delError } = await supabase.storage
@@ -1739,6 +1780,14 @@ function ProductsPage({
       }
     }
     const paths = [...pathsToKeep];
+    // Build colour map aligned with final image order (magnet pairing).
+    // Always derive from the per-image colour map so changes made in admin
+    // (new/removed/rearranged colours) reflect correctly on the client side.
+    const finalColorMap = [...colorImageMap];
+    // Ensure every image has a colour slot (pad if needed), but NEVER trim
+    // — colours added via the text input for which no image exists yet must
+    // still appear on the client side (they fall back to the active image).
+    while (finalColorMap.length < pathsToKeep.length) finalColorMap.push("");
     for (const file of f
       .getAll("photos")
       .filter((v): v is File => v instanceof File && v.size > 0)) {
@@ -1760,6 +1809,7 @@ function ProductsPage({
         return;
       }
       paths.push(uploaded.path);
+      finalColorMap.push("");
     }
     if (
       !name ||
@@ -1794,8 +1844,14 @@ function ProductsPage({
       price,
       currency_code: "GHS",
       image_paths: paths,
-      size_options: [...new Set(validVariants.map((v) => v.size.trim()))],
-      color_options: [...new Set(validVariants.map((v) => v.color.trim()))],
+      // Preserve the user's arranged size order (never shuffle on edit/reload).
+      size_options:
+        orderedSizeOptions.length > 0
+          ? [...orderedSizeOptions.filter((s) => s.trim())]
+          : [...new Set(validVariants.map((v) => v.size.trim()))],
+      // colour_options aligned with image_paths (magnet pairing): unique colours
+      // from the per-image colour map, in image order.
+      color_options: [...new Set(finalColorMap.filter((c) => c.trim()))],
       is_available: f.get("available") === "on",
       is_published: f.get("published") === "on",
       stock_quantity: stock,
@@ -1887,6 +1943,10 @@ function ProductsPage({
       say(`Product saved, cost could not be saved: ${costError.message}`);
     else say(id ? "Product updated." : "Product added.");
     setEditing(null);
+    setImagePathsToDelete([]);
+    setOrderedImagePaths([]);
+    setColorImageMap([]);
+    setOrderedSizeOptions([]);
     setBusy(false);
     onRefresh();
   }
@@ -2162,7 +2222,24 @@ function ProductsPage({
                   <input
                     aria-label="Variant sizes"
                     value={sizes}
-                    onChange={(e) => setSizes(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSizes(value);
+                      // Sync orderedSizeOptions with the sizes text input so
+                      // the saved order never shuffles on edit/reload.
+                      const sizeList = value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      const currentSizes = orderedSizeOptions.filter((s) => s.trim());
+                      const newSizes = sizeList.filter((s) => !currentSizes.includes(s));
+                      const deletedSizes = currentSizes.filter((s) => !sizeList.includes(s));
+                      let next = orderedSizeOptions.filter((s) => !deletedSizes.includes(s));
+                      newSizes.forEach((s) => {
+                        if (!next.includes(s)) next.push(s);
+                      });
+                      setOrderedSizeOptions(next);
+                    }}
                     placeholder="e.g. S, M, L, XL"
                   />
                 </label>
@@ -2171,7 +2248,29 @@ function ProductsPage({
                   <input
                     aria-label="Variant colours"
                     value={colors}
-                    onChange={(e) => setColors(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setColors(value);
+                      // Sync colorImageMap with the colours text input:
+                      // add new colours, blank out deleted ones. Each image
+                      // keeps its paired colour; surplus colours are appended.
+                      const colorList = value
+                        .split(",")
+                        .map((c) => c.trim())
+                        .filter(Boolean);
+                      const currentUnique = [...new Set(colorImageMap.filter((c) => c.trim()))];
+                      const newColors = colorList.filter((c) => !currentUnique.includes(c));
+                      const deletedColors = currentUnique.filter((c) => !colorList.includes(c));
+                      let next = colorImageMap.map((c) =>
+                        deletedColors.includes(c) ? "" : c,
+                      );
+                      newColors.forEach((c) => {
+                        const emptyIdx = next.findIndex((x) => !x.trim());
+                        if (emptyIdx >= 0) next[emptyIdx] = c;
+                        else next.push(c);
+                      });
+                      setColorImageMap(next);
+                    }}
                     placeholder="e.g. Black, White, Red"
                   />
                 </label>
@@ -2234,6 +2333,17 @@ function ProductsPage({
                         })),
                       ),
                     );
+                    // Sync the per-image colour map with the entered colours
+                    // so every colour can be assigned to an image position.
+                    if (orderedImagePaths.length > 0) {
+                      const next = colorList.slice(0, orderedImagePaths.length).map(
+                        (c, i) => colorImageMap[i]?.trim() || c,
+                      );
+                      setColorImageMap(next);
+                    } else {
+                      setColorImageMap([...colorList]);
+                    }
+                    setColors(colorList.join(", "));
                   }}
                 >
                   Generate variants
@@ -2290,24 +2400,90 @@ function ProductsPage({
             </label>
             <label className="admin-form-wide">
               Photos (JPEG, PNG, WebP · max 5 MB each)
-              {current?.image_paths?.length && (
+              <p className="photo-hint" style={{ marginTop: 4, fontSize: 11, color: "#6e726b" }}>
+                Each image is paired with a colour (magnet). Reordering images
+                moves their colours with them. On the product page, tapping a
+                colour shows its paired image.
+              </p>
+              {orderedImagePaths.length > 0 && (
                 <div className="photo-gallery" style={{ marginTop: 8 }}>
-                  {current.image_paths.map((path, i) => (
-                    <div key={i} className="photo-item">
-                      <img
-                        src={`https://qavvobfskuhebepnglhh.supabase.co/storage/v1/object/public/store-items/${path}`}
-                        alt={`Product photo ${i + 1}`}
-                        className="photo-thumb"
-                      />
-                      <button
-                        type="button"
-                        className="photo-remove"
-                        onClick={() => setImagePathsToDelete([...imagePathsToDelete, path])}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                  {orderedImagePaths.map((path, i) => {
+                    const imgColor = colorImageMap[i] ?? "";
+                    return (
+                      <div key={i} className="photo-item">
+                        <img
+                          src={`https://qavvobfskuhebepnglhh.supabase.co/storage/v1/object/public/store-items/${path}`}
+                          alt={`Product photo ${i + 1}`}
+                          className="photo-thumb"
+                        />
+                        <div className="photo-controls">
+                          <input
+                            type="text"
+                            placeholder="Colour"
+                            value={imgColor}
+                            onChange={(e) => {
+                              const next = [...colorImageMap];
+                              next[i] = e.target.value.trim();
+                              setColorImageMap(next);
+                              // Sync the colours text input so variants stay
+                              // consistent with the per-image colour map.
+                              const uniqueColors = [...new Set(next.filter((c) => c.trim()))];
+                              setColors(uniqueColors.join(", "));
+                            }}
+                            className="photo-color-input"
+                          />
+                          <button
+                            type="button"
+                            className="photo-move photo-move-up"
+                            disabled={i === 0}
+                            onClick={() => {
+                              const nextPaths = [...orderedImagePaths];
+                              const nextColors = [...colorImageMap];
+                              [nextPaths[i - 1], nextPaths[i]] = [nextPaths[i], nextPaths[i - 1]];
+                              [nextColors[i - 1], nextColors[i]] = [nextColors[i], nextColors[i - 1]];
+                              setOrderedImagePaths(nextPaths);
+                              setColorImageMap(nextColors);
+                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                            }}
+                            aria-label="Move image up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            className="photo-move photo-move-down"
+                            disabled={i === orderedImagePaths.length - 1}
+                            onClick={() => {
+                              const nextPaths = [...orderedImagePaths];
+                              const nextColors = [...colorImageMap];
+                              [nextPaths[i + 1], nextPaths[i]] = [nextPaths[i], nextPaths[i + 1]];
+                              [nextColors[i + 1], nextColors[i]] = [nextColors[i], nextColors[i + 1]];
+                              setOrderedImagePaths(nextPaths);
+                              setColorImageMap(nextColors);
+                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                            }}
+                            aria-label="Move image down"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            className="photo-remove"
+                            onClick={() => {
+                              setImagePathsToDelete([...imagePathsToDelete, path]);
+                              const nextPaths = orderedImagePaths.filter((_, idx) => idx !== i);
+                              const nextColors = colorImageMap.filter((_, idx) => idx !== i);
+                              setOrderedImagePaths(nextPaths);
+                              setColorImageMap(nextColors);
+                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {imagePathsToDelete.length > 0 && (
                     <p className="photo-hint">
                       {imagePathsToDelete.length} image(s) marked for removal.

@@ -20,6 +20,6 @@ if (typeof document !== "undefined") {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {AdminMode ? <Admin onExit={() => {}} /> : <App />}
+    {AdminMode ? <Admin onExit={() => {}} onCatalogRefresh={() => {}} /> : <App />}
   </React.StrictMode>,
 );

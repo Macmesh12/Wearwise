@@ -223,7 +223,13 @@ function Status({ children }: { children: React.ReactNode }) {
   return <span className={`a-status ${auto}`}>{children}</span>;
 }
 
-function Admin({ onExit }: { onExit: () => void }) {
+function Admin({
+  onExit,
+  onCatalogRefresh,
+}: {
+  onExit: () => void;
+  onCatalogRefresh: () => void;
+}) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState("");
@@ -782,6 +788,7 @@ function Admin({ onExit }: { onExit: () => void }) {
               page={page}
               data={data}
               onRefresh={() => setReloadKey((key) => key + 1)}
+              onCatalogRefresh={onCatalogRefresh}
               onDiscountSaved={(discount) =>
                 setData((current) => ({
                   ...current,
