@@ -127,6 +127,13 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M8.5 8.5c.4 3 2 4.6 5 5" />
       </>
     ),
+    share: (
+      <>
+        <circle cx="18" cy="9" r="3" />
+        <path d="M21 9c0 5-11 5-11 0" />
+        <path d="M21 9c0 2-11 2-11 0" />
+      </>
+    ),
     check: <path d="m5 12 4 4L19 6" />,
     home: (
       <>
@@ -1022,8 +1029,19 @@ function ProductDetail({
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
   const [activeImage, setActiveImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
+  const [toast, setToast] = useState("");
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
+
+  const fallbackShare = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setToast("Link copied to clipboard");
+      window.setTimeout(() => setToast(""), 2000);
+    } catch {
+      window.open(url, "_blank");
+    }
+  };
 
   const handleAdd = () => {
     add(qty, size, color);
@@ -1085,13 +1103,16 @@ function ProductDetail({
       <button className="back-link" onClick={() => go("shop")}>
         ← Back to shop
       </button>
+      {toast && (
+        <div className="toast">
+          <Icon name="check" />
+          {toast}
+        </div>
+      )}
       <div className="detail-layout">
         <div className="detail-header">
           <span className="eyebrow">{product.category}</span>
           <h1>{product.name}</h1>
-          <div className="detail-price">
-            GHS {product.price.toLocaleString()}
-          </div>
           <div className="stock-line">
             <span className="status-dot" /> {product.stock}{" "}
             <small>• Deliver within 1–2 days</small>
@@ -1131,7 +1152,34 @@ function ProductDetail({
             ))}
           </div>
         </div>
+        {product.images.length > 0 && (
+          <div className="share-area">
+            <button
+              className="share-btn"
+              aria-label="Share product"
+              onClick={() => {
+                const url = `${window.location.origin}/product/${product.id}`;
+                if (navigator.share) {
+                  navigator
+                    .share({
+                      title: product.name,
+                      text: `GHS ${product.price.toLocaleString()} — ${product.name}`,
+                      url,
+                    })
+                    .catch(() => fallbackShare(url));
+                } else {
+                  fallbackShare(url);
+                }
+              }}
+            >
+              <Icon name="share" />
+            </button>
+          </div>
+        )}
         <div className="detail-copy">
+          <div className="detail-price">
+            GHS {product.price.toLocaleString()}
+          </div>
           {product.colorOptions.length > 0 && (
             <Option title="Colour">
               <div className="pill-row">

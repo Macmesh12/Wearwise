@@ -1113,7 +1113,14 @@ function RequestQuoteDrawer({
       row.selected_design_snapshot !== null
         ? (row.selected_design_snapshot as Record<string, unknown>)
         : undefined;
-    if (snap?.image) return String(snap.image);
+    // The snapshot stored by create-order carries image_path / preview_path
+    // (storage paths under the "designs" bucket), so build the public URL from
+    // them directly rather than matching on the design title.
+    const path = String(snap?.preview_path ?? snap?.image_path ?? "");
+    if (path) {
+      return supabase.storage.from("designs").getPublicUrl(path).data.publicUrl;
+    }
+    // Fallback: match by title if the snapshot was saved without paths.
     const name = String(snap?.title ?? snap?.name ?? "");
     if (!name) return "";
     const match = designs.find((d) => String(d.title ?? "") === name);
