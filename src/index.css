@@ -2859,3 +2859,46 @@ footer {
     justify-content: flex-start;
   }
 }
+
+.share-area {
+  padding: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.share-area .share-btn {
+  padding: 4px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--gray-2);
+  background: var(--white);
+  transition: background 0.15s ease;
+}
+
+.share-area .share-btn:hover {
+  background: var(--white);
+}
+
+.share-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  stroke: var(--ink);
+  stroke-width: 2;
+  fill: var(--ink);
+}
+
+@media (max-width: 720px) {
+  .share-area .share-btn {
+    padding: 6px;
+  }
+
+  .share-icon {
+    width: 20px;
+    height: 20px;
+  }
+}

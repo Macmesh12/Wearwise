@@ -127,13 +127,6 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
         <path d="M8.5 8.5c.4 3 2 4.6 5 5" />
       </>
     ),
-    share: (
-      <>
-        <circle cx="18" cy="9" r="3" />
-        <path d="M21 9c0 5-11 5-11 0" />
-        <path d="M21 9c0 2-11 2-11 0" />
-      </>
-    ),
     check: <path d="m5 12 4 4L19 6" />,
     home: (
       <>
@@ -371,8 +364,33 @@ function App() {
     };
   }, [catalogReloadKey]);
 
+  // Handle initial load with ?product=<id> query param
   useEffect(() => {
-    const onPopState = () =>
+    if (!catalogLoading && products.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const productId = params.get("product");
+      if (productId) {
+        const match = products.find((p) => p.id === productId);
+        if (match && page !== "product") {
+          setSelectedProduct(match);
+          setPage("product");
+        }
+      }
+    }
+  }, [catalogLoading, products, page]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const productId = params.get("product");
+      if (productId) {
+        const match = products.find((p) => p.id === productId);
+        if (match) {
+          setSelectedProduct(match);
+          setPage("product");
+          return;
+        }
+      }
       setPage(
         window.location.pathname === "/admin"
           ? "admin"
@@ -380,9 +398,10 @@ function App() {
             ? "payment-return"
             : "home",
       );
+    };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [products]);
 
   useEffect(() => {
     const pageTitles: Partial<Record<Page, string>> = {
@@ -1158,7 +1177,7 @@ function ProductDetail({
               className="share-btn"
               aria-label="Share product"
               onClick={() => {
-                const url = `${window.location.origin}/product/${product.id}`;
+                const url = `${window.location.origin}/?product=${product.id}`;
                 if (navigator.share) {
                   navigator
                     .share({
@@ -1172,7 +1191,7 @@ function ProductDetail({
                 }
               }}
             >
-              <Icon name="share" />
+              <img src="/share.png" alt="Share" className="share-icon" />
             </button>
           </div>
         )}
