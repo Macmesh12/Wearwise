@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import Admin from "./Admin";
 import {
   publicSupabaseAnonKey,
@@ -585,6 +586,7 @@ function App() {
         )}
         <BottomNav page={page} cartCount={cartCount} go={go} />
       </div>
+      <Analytics />
     </CatalogContext.Provider>
   );
 }
