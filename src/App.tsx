@@ -1171,30 +1171,6 @@ function ProductDetail({
             ))}
           </div>
         </div>
-        {product.images.length > 0 && (
-          <div className="share-area">
-            <button
-              className="share-btn"
-              aria-label="Share product"
-              onClick={() => {
-                const url = `${window.location.origin}/?product=${product.id}`;
-                if (navigator.share) {
-                  navigator
-                    .share({
-                      title: product.name,
-                      text: `GHS ${product.price.toLocaleString()} — ${product.name}`,
-                      url,
-                    })
-                    .catch(() => fallbackShare(url));
-                } else {
-                  fallbackShare(url);
-                }
-              }}
-            >
-              <img src="/share.png" alt="Share" className="share-icon" />
-            </button>
-          </div>
-        )}
         <div className="detail-copy">
           <div className="detail-price">
             GHS {product.price.toLocaleString()}
@@ -1229,27 +1205,35 @@ function ProductDetail({
               </div>
             </Option>
           )}
-          <div className="buy-row">
-            <div className="qty">
-              <button onClick={() => setQty(Math.max(1, qty - 1))}>
-                <Icon name="minus" />
-              </button>
-              <span>{qty}</span>
-              <button onClick={() => setQty(Math.min(20, qty + 1))}>
-                <Icon name="plus" />
-              </button>
-            </div>
-            <Button
-              onClick={handleAdd}
-              className="grow"
-              variant={isAdded ? "outline" : "primary"}
-            >
-              {isAdded ? "Added to cart ✓" : `Add to cart — GHS ${(product.price * qty).toLocaleString()}`}
+                 <div className="action-row">
+          <div className="action-group">
+            <Button variant="outline" className="wide" onClick={handleWhatsApp}>
+              <Icon name="whatsapp" /> WhatsApp enquiry
             </Button>
           </div>
-          <Button variant="outline" className="wide" onClick={handleWhatsApp}>
-            <Icon name="whatsapp" /> WhatsApp enquiry
-          </Button>
+          <div className="action-group">
+            <button
+              className="share-btn"
+              aria-label="Share product"
+              onClick={() => {
+                const url = `${window.location.origin}/?product=${product.id}`;
+                if (navigator.share) {
+                  navigator
+                    .share({
+                      title: product.name,
+                      text: `GHS ${product.price.toLocaleString()} — ${product.name}`,
+                      url,
+                    })
+                    .catch(() => fallbackShare(url));
+                } else {
+                  fallbackShare(url);
+                }
+              }}
+            >
+              <img src="/share.png" alt="Share" className="share-icon" />
+            </button>
+          </div>
+        </div>
           <div className="description">
             <h3>Details</h3>
             <p>

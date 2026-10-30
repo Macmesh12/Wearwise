@@ -2860,15 +2860,20 @@ footer {
   }
 }
 
-.share-area {
-  padding: 0;
+.action-row {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.share-area .share-btn {
-  padding: 4px;
+.action-group {
+  display: flex;
+  align-items: center;
+}
+
+.share-btn {
+  padding: 8px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -2879,8 +2884,8 @@ footer {
   transition: background 0.15s ease;
 }
 
-.share-area .share-btn:hover {
-  background: var(--white);
+.share-btn:hover {
+  background: var(--gray-2);
 }
 
 .share-icon {
@@ -2893,12 +2898,8 @@ footer {
 }
 
 @media (max-width: 720px) {
-  .share-area .share-btn {
-    padding: 6px;
-  }
-
   .share-icon {
-    width: 20px;
-    height: 20px;
+    width: 30px;
+    height: 30px;
   }
 }
