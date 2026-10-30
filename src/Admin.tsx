@@ -10,6 +10,7 @@ type AdminPage =
   | "orders"
   | "requests"
   | "products"
+  | "shirt-types"
   | "categories"
   | "discounts"
   | "payments"
@@ -90,6 +91,16 @@ type Category = {
   image_url: string | null;
   status: "active" | "hidden" | "archived";
   created_at: string;
+};
+type ShirtType = {
+  id: string;
+  name: string;
+  category: string;
+  usual_sizes: string[];
+  usual_colors: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 };
 type Discount = {
   id: string;
@@ -193,6 +204,7 @@ type AdminData = {
   productCount: number;
   pendingCount: number;
   products: StoreItem[];
+  shirtTypes: ShirtType[];
   variants: ProductVariant[];
   designs: GalleryDesign[];
   categories: Category[];
@@ -210,6 +222,7 @@ const nav: { page: AdminPage; label: string; glyph: string }[] = [
   { page: "orders", label: "Shop Orders", glyph: "□" },
   { page: "requests", label: "Design Requests", glyph: "◇" },
   { page: "products", label: "Products", glyph: "▦" },
+  { page: "shirt-types", label: "Shirt Types", glyph: "👕" },
   { page: "categories", label: "Categories", glyph: "⌗" },
   { page: "discounts", label: "Discounts", glyph: "%" },
   { page: "payments", label: "Payments", glyph: "₵" },
@@ -244,6 +257,7 @@ function Admin({
     productCount: 0,
     pendingCount: 0,
     products: [],
+    shirtTypes: [],
     variants: [],
     designs: [],
     categories: [],
@@ -295,6 +309,7 @@ function Admin({
         variants,
         variantCosts,
         designs,
+        shirtTypes,
         categories,
         discounts,
         payments,
@@ -340,6 +355,12 @@ function Admin({
           .select("id,title,category,image_path,preview_path,published")
           .order("created_at", { ascending: false })
           .limit(500),
+        supabase
+          .from("products")
+          .select(
+            "id,name,category,usual_sizes,usual_colors,is_active,created_at,updated_at",
+          )
+          .order("created_at", { ascending: false }),
         supabase
           .from("categories")
           .select("id,name,slug,description,image_url,status,created_at")
@@ -402,6 +423,7 @@ function Admin({
         variants.error ??
         variantCosts.error ??
         designs.error ??
+        shirtTypes.error ??
         categories.error ??
         discounts.error ??
         payments.error ??
@@ -442,6 +464,7 @@ function Admin({
         pendingCount: pendingTotal.count ?? 0,
         productCount: productTotal.count ?? 0,
         products: mappedProducts,
+        shirtTypes: (shirtTypes.data ?? []) as ShirtType[],
         variants: mappedVariants,
         designs: (designs.data ?? []) as GalleryDesign[],
         categories: (categories.data ?? []) as Category[],

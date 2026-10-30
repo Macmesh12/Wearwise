@@ -1,10 +1,11 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 
 type AdminPage =
   | "orders"
   | "requests"
   | "products"
+  | "shirt-types"
   | "categories"
   | "discounts"
   | "payments"
@@ -175,6 +176,7 @@ type Preferences = {
 type Data = {
   orders: Order[];
   products: StoreItem[];
+  shirtTypes: ShirtType[];
   variants: ProductVariant[];
   designs: GalleryDesign[];
   categories: Category[];
@@ -185,11 +187,22 @@ type Data = {
   settings: Settings;
   preferences: Preferences | null;
 };
+type ShirtType = {
+  id: string;
+  name: string;
+  category: string;
+  usual_sizes: string[];
+  usual_colors: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 const heads: Record<AdminPage, [string, string]> = {
   orders: ["OPERATIONS / SHOP", "Shop Orders"],
   requests: ["OPERATIONS / CUSTOM", "Design Requests"],
   products: ["CATALOGUE", "Products"],
+  "shirt-types": ["CATALOGUE", "Shirt Types"],
   categories: ["CATALOGUE", "Categories"],
   discounts: ["MARKETING", "Discounts"],
   payments: ["FINANCE", "Payments"],
@@ -261,6 +274,7 @@ export default function AdminSections({
         <OrdersPage
           title={title}
           rows={data.orders.filter((o) => o.order_type === "store_purchase")}
+          designs={data.designs}
           discounts={data.discounts}
           onRefresh={onRefresh}
           say={say}
@@ -270,6 +284,7 @@ export default function AdminSections({
         <OrdersPage
           title={title}
           rows={data.orders.filter((o) => o.order_type !== "store_purchase")}
+          designs={data.designs}
           discounts={data.discounts}
           onRefresh={onRefresh}
           say={say}
@@ -283,6 +298,13 @@ export default function AdminSections({
           categories={data.categories}
           onRefresh={onRefresh}
           onCatalogRefresh={onCatalogRefresh}
+          say={say}
+        />
+      )}
+      {page === "shirt-types" && (
+        <ShirtTypesPage
+          rows={data.shirtTypes}
+          onRefresh={onRefresh}
           say={say}
         />
       )}
@@ -433,12 +455,14 @@ function OrdersPage({
   title,
   rows,
   discounts,
+  designs,
   onRefresh,
   say,
 }: {
   title: string;
   rows: Order[];
   discounts: Discount[];
+  designs: GalleryDesign[];
   onRefresh: () => void;
   say: (s: string) => void;
 }) {
@@ -859,6 +883,7 @@ function OrdersPage({
         (isRequests ? (
           <RequestQuoteDrawer
             row={selected}
+            designs={designs}
             discounts={discounts.filter((d) => d.status === "active")}
             close={() => setSelected(null)}
             say={say}
@@ -1053,12 +1078,14 @@ function OrderDetailDrawer({
 }
 function RequestQuoteDrawer({
   row,
+  designs,
   discounts,
   close,
   say,
   onSaved,
 }: {
   row: Order;
+  designs: GalleryDesign[];
   discounts: Discount[];
   close: () => void;
   say: (message: string) => void;
@@ -1077,6 +1104,25 @@ function RequestQuoteDrawer({
   const [proofUrl, setProofUrl] = useState("");
   const [customerArtworkUrl, setCustomerArtworkUrl] = useState("");
   const [paymentLink, setPaymentLink] = useState(row.payment_link ?? "");
+
+  // Preview image for the requested design (shown in the request cover so the
+  // admin can see which existing design the customer is requesting).
+  const designImage = useMemo(() => {
+    const snap =
+      typeof row.selected_design_snapshot === "object" &&
+      row.selected_design_snapshot !== null
+        ? (row.selected_design_snapshot as Record<string, unknown>)
+        : undefined;
+    if (snap?.image) return String(snap.image);
+    const name = String(snap?.title ?? snap?.name ?? "");
+    if (!name) return "";
+    const match = designs.find((d) => String(d.title ?? "") === name);
+    if (!match) return "";
+    return supabase.storage
+      .from("designs")
+      .getPublicUrl(match.preview_path || match.image_path).data.publicUrl;
+  }, [row.selected_design_snapshot, designs]);
+
   useEffect(() => {
     let active = true;
     if (row.proof_image_path)
@@ -1324,6 +1370,18 @@ function RequestQuoteDrawer({
   return (
     <Modal title={row.order_code} close={close}>
       <div className="request-cover">
+        {designImage && (
+          <img
+            src={designImage}
+            alt={
+              String(
+                selectedDesign.title ??
+                  selectedDesign.name ??
+                  "design",
+              ) ?? "design"
+            }
+          />
+        )}
         <div>
           <span>{row.order_type.replaceAll("_", " ")}</span>
           <strong>
@@ -1615,6 +1673,293 @@ function RequestQuoteDrawer({
   );
 }
 
+function ShirtTypesPage({
+  rows,
+  onRefresh,
+  say,
+}: {
+  rows: ShirtType[];
+  onRefresh: () => void;
+  say: (s: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | boolean>(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{
+    name: string;
+    category: string;
+    sizes: string;
+    colors: string;
+    is_active: boolean;
+  }>({
+    name: "",
+    category: "T-shirts",
+    sizes: "S, M, L",
+    colors: "Black, White",
+    is_active: true,
+  });
+  function parseList(value: string) {
+    return value.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  async function addShirtType(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const sizes = parseList(draft.sizes);
+    const colors = parseList(draft.colors);
+    if (!draft.name.trim() || sizes.length === 0 || colors.length === 0) {
+      say("Name, at least one size and one colour are required.");
+      setBusy(false);
+      return;
+    }
+    const { error } = await supabase.from("products").insert({
+      name: draft.name.trim(),
+      category: draft.category.trim(),
+      usual_sizes: sizes,
+      usual_colors: colors,
+      is_active: draft.is_active,
+    });
+    setBusy(false);
+    if (error) {
+      say(error.message);
+      return;
+    }
+    say("Shirt type added.");
+    setDraft({
+      name: "",
+      category: "T-shirts",
+      sizes: "S, M, L",
+      colors: "Black, White",
+      is_active: true,
+    });
+    onRefresh();
+  }
+  async function saveShirtType(
+    id: string,
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    setBusy(id);
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    const category = String(form.get("category") ?? "").trim();
+    const sizes = parseList(String(form.get("sizes") ?? ""));
+    const colors = parseList(String(form.get("colors") ?? ""));
+    const is_active = form.get("is_active") === "on";
+    if (!name || !category || sizes.length === 0 || colors.length === 0) {
+      say("Name, category, at least one size and one colour are required.");
+      setBusy(false);
+      return;
+    }
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name,
+        category,
+        usual_sizes: sizes,
+        usual_colors: colors,
+        is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    setBusy(false);
+    if (error) {
+      say(error.message);
+      return;
+    }
+    say("Shirt type updated.");
+    setEditingId(null);
+    onRefresh();
+  }
+  async function removeShirtType(id: string) {
+    if (
+      !window.confirm(
+        "Remove this shirt type? Customers will no longer be able to request it.",
+      )
+    )
+      return;
+    setBusy(id);
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    setBusy(false);
+    if (error) {
+      say(error.message);
+      return;
+    }
+    say("Shirt type removed.");
+    onRefresh();
+  }
+  return (
+    <div className="a-panel">
+      <div className="panel-head">
+        <h2>Shirt Types</h2>
+        <span>Custom design shirt options (sizes &amp; colours)</span>
+      </div>
+      <form onSubmit={addShirtType} className="shirt-types-add">
+        <div className="form-grid">
+          <label className="field">
+            <span>Name</span>
+            <input
+              name="name"
+              value={draft.name}
+              onChange={(e) =>
+                setDraft({ ...draft, name: e.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Category</span>
+            <input
+              name="category"
+              value={draft.category}
+              onChange={(e) =>
+                setDraft({ ...draft, category: e.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Sizes (comma separated)</span>
+            <input
+              name="sizes"
+              value={draft.sizes}
+              onChange={(e) =>
+                setDraft({ ...draft, sizes: e.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Colours (comma separated)</span>
+            <input
+              name="colors"
+              value={draft.colors}
+              onChange={(e) =>
+                setDraft({ ...draft, colors: e.target.value })
+              }
+            />
+          </label>
+          <label className="field">
+            <label>
+              <input
+                name="is_active"
+                type="checkbox"
+                checked={draft.is_active}
+                onChange={(e) =>
+                  setDraft({ ...draft, is_active: e.target.checked })
+                }
+              />
+              Active
+            </label>
+          </label>
+        </div>
+        <button
+          type="submit"
+          className="a-button dark"
+          disabled={busy === true}
+        >
+          {busy === true ? "Adding…" : "Add shirt type"}
+        </button>
+      </form>
+      <div className="shirt-type-list">
+        {rows.length === 0 && (
+          <p>No shirt types yet. Add your first one above.</p>
+        )}
+        {rows.map((t) => {
+          const editing = editingId === t.id;
+          return (
+            <div key={t.id} className="shirt-type-row">
+              {editing ? (
+                <form onSubmit={(e) => saveShirtType(t.id, e)}>
+                  <div className="form-grid">
+                    <label className="field">
+                      <span>Name</span>
+                      <input name="name" defaultValue={t.name} />
+                    </label>
+                    <label className="field">
+                      <span>Category</span>
+                      <input
+                        name="category"
+                        defaultValue={t.category}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Sizes</span>
+                      <input
+                        name="sizes"
+                        defaultValue={t.usual_sizes.join(", ")}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Colours</span>
+                      <input
+                        name="colors"
+                        defaultValue={t.usual_colors.join(", ")}
+                      />
+                    </label>
+                    <label className="field">
+                      <label>
+                        <input
+                          name="is_active"
+                          type="checkbox"
+                          defaultChecked={t.is_active}
+                        />
+                        Active
+                      </label>
+                    </label>
+                  </div>
+                  <div className="form-actions">
+                    <button
+                      type="submit"
+                      className="a-button dark"
+                      disabled={busy === t.id}
+                    >
+                      {busy === t.id ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      className="a-button outline"
+                      onClick={() => setEditingId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="shirt-type-info">
+                    <strong>{t.name}</strong>
+                    <span>{t.category}</span>
+                    <span className="sizes">
+                      Sizes: {t.usual_sizes.join(", ")}
+                    </span>
+                    <span className="colors">
+                      Colours: {t.usual_colors.join(", ")}
+                    </span>
+                    <span className={`status ${t.is_active ? "active" : ""}`}>
+                      {t.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="shirt-type-actions">
+                    <button
+                      type="button"
+                      className="a-button outline"
+                      onClick={() => setEditingId(t.id)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="a-button outline"
+                      onClick={() => removeShirtType(t.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 function ProductsPage({
   rows,
   variants,

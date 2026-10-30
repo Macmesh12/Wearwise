@@ -262,6 +262,7 @@ function App() {
   const [cartCount, setCartCount] = useState(0);
   const [cartSize, setCartSize] = useState("");
   const [cartColor, setCartColor] = useState("");
+  const [cartProduct, setCartProduct] = useState<Product | null>(null);
   const [initialCategory, setInitialCategory] = useState<string | null>(null);
   const [discount, setDiscount] = useState<AppliedDiscount | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -419,6 +420,7 @@ function App() {
   ) => {
     if (product) {
       setSelectedProduct(product);
+      setCartProduct(product);
       setCartSize(options?.size ?? product.sizeOptions[0] ?? "");
       setCartColor(options?.color ?? product.colorOptions[0] ?? "");
     } else if (options) {
@@ -516,6 +518,7 @@ function App() {
             <ProductDetail
               key={selectedProduct.id}
               product={selectedProduct}
+              cartProduct={cartProduct}
               add={(quantity, size, color) =>
                 add(undefined, quantity, { size, color })
               }
@@ -979,17 +982,40 @@ function Filter({
 
 function ProductDetail({
   product,
+  cartProduct,
   add,
   go,
   selectProduct,
 }: {
   product: Product;
+  cartProduct?: Product | null;
   add: (quantity: number, size: string, color: string) => void;
   go: (p: Page) => void;
   selectProduct: (p: Product) => void;
 }) {
   const { products } = useCatalog();
   const [qty, setQty] = useState(1);
+
+  // Intelligent "you may also like": surface products from the same category as
+  // the item currently being viewed (and the item already in the cart) first,
+  // then fill the rest with other catalogue items.
+  const relatedProducts = useMemo(() => {
+    const viewedCategory = product.category;
+    const cartCategory = cartProduct?.category;
+    const others = products.filter((x) => x.id !== product.id);
+    const sameAsViewed = others.filter((x) => x.category === viewedCategory);
+    const sameAsCart =
+      cartCategory && cartCategory !== viewedCategory
+        ? others.filter(
+            (x) => x.category === cartCategory && x.category !== viewedCategory,
+          )
+        : [];
+    const rest = others.filter(
+      (x) =>
+        x.category !== viewedCategory && x.category !== cartCategory,
+    );
+    return [...sameAsViewed, ...sameAsCart, ...rest].slice(0, 4);
+  }, [product, cartProduct, products]);
   const [size, setSize] = useState(product.sizeOptions[0] ?? "");
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
   const [activeImage, setActiveImage] = useState(0);
@@ -1014,6 +1040,19 @@ function ProductDetail({
   const handleColorSelect = (x: string, idx: number) => {
     setColor(x);
     setActiveImage(imageIndexForColor(x));
+  };
+
+  // WhatsApp enquiry: pre-fill the customer's DM with the product name and
+  // the currently viewed image URL so WhatsApp shows a link preview of it.
+  const storeWhatsApp = "233269922736";
+  const handleWhatsApp = () => {
+    const imageUrl = product.images[activeImage] || "";
+    const message = `Hi WearWise, I'd like to enquire about *${product.name}* (GHS ${product.price.toLocaleString()}). ${imageUrl}`;
+    window.open(
+      `https://wa.me/${storeWhatsApp}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -1045,6 +1084,17 @@ function ProductDetail({
         ← Back to shop
       </button>
       <div className="detail-layout">
+        <div className="detail-header">
+          <span className="eyebrow">{product.category}</span>
+          <h1>{product.name}</h1>
+          <div className="detail-price">
+            GHS {product.price.toLocaleString()}
+          </div>
+          <div className="stock-line">
+            <span className="status-dot" /> {product.stock}{" "}
+            <small>• Deliver within 1–2 days</small>
+          </div>
+        </div>
         <div
           className="gallery"
           onTouchStart={handleTouchStart}
@@ -1080,30 +1130,6 @@ function ProductDetail({
           </div>
         </div>
         <div className="detail-copy">
-          <span className="eyebrow">{product.category}</span>
-          <h1>{product.name}</h1>
-          <div className="detail-price">
-            GHS {product.price.toLocaleString()}
-          </div>
-          <div className="stock-line">
-            <span className="status-dot" /> {product.stock}{" "}
-            <small>• Deliver within 1–2 days</small>
-          </div>
-          {product.sizeOptions.length > 0 && (
-            <Option title="Select size">
-              <div className="pill-row">
-                {product.sizeOptions.map((x) => (
-                  <button
-                    className={size === x ? "selected" : ""}
-                    onClick={() => setSize(x)}
-                    key={x}
-                  >
-                    {x}
-                  </button>
-                ))}
-              </div>
-            </Option>
-          )}
           {product.colorOptions.length > 0 && (
             <Option title="Colour">
               <div className="pill-row">
@@ -1112,6 +1138,21 @@ function ProductDetail({
                     className={color === x ? "selected" : ""}
                     key={`${x}-${idx}`}
                     onClick={() => handleColorSelect(x, idx)}
+                  >
+                    {x}
+                  </button>
+                ))}
+              </div>
+            </Option>
+          )}
+          {product.sizeOptions.length > 0 && (
+            <Option title="Select size">
+              <div className="pill-row">
+                {product.sizeOptions.map((x) => (
+                  <button
+                    className={size === x ? "selected" : ""}
+                    onClick={() => setSize(x)}
+                    key={x}
                   >
                     {x}
                   </button>
@@ -1137,7 +1178,7 @@ function ProductDetail({
               {isAdded ? "Added to cart ✓" : `Add to cart — GHS ${(product.price * qty).toLocaleString()}`}
             </Button>
           </div>
-          <Button variant="outline" className="wide">
+          <Button variant="outline" className="wide" onClick={handleWhatsApp}>
             <Icon name="whatsapp" /> WhatsApp enquiry
           </Button>
           <div className="description">
@@ -1152,19 +1193,16 @@ function ProductDetail({
       <section className="related">
         <SectionHead title="You may also like." />
         <div className="product-row">
-          {products
-            .filter((x) => x.id !== product.id)
-            .slice(0, 3)
-            .map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onClick={() => {
-                  selectProduct(p);
-                  window.scrollTo(0, 0);
-                }}
-              />
-            ))}
+          {relatedProducts.map((p) => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              onClick={() => {
+                selectProduct(p);
+                window.scrollTo(0, 0);
+              }}
+            />
+          ))}
         </div>
       </section>
     </div>
