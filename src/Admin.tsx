@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import AdminSections from "./AdminSections";
 import "./admin.css";
 import { enablePushNotifications } from "./lib/push";
@@ -830,6 +831,7 @@ function Admin({
           )}
         </div>
       </main>
+      <Analytics />
     </div>
   );
 }
