@@ -393,14 +393,29 @@ function App() {
 
   // Update OG meta tags when a product is being viewed so shared links
   // render a preview (image, name, price) on WhatsApp, Twitter, etc.
+  // Uses product.images[activeImage] so the currently viewed colour's image
+  // is the one that appears in WhatsApp Status / SDDM previews.
   useEffect(() => {
     const product = selectedProduct;
-    const url = `${window.location.origin}/?product=${product?.id ?? ""}`;
-    const image = product?.images[0] ?? "";
-    const description = product
-      ? `GHS ${product.price.toLocaleString()} — ${product.name}`
-      : "Ghanaian streetwear designed in Accra.";
-    const title = product ? `${product.name} | WearWise` : "WearWise | Ghanaian Streetwear";
+    if (!product) {
+      // Clear OG tags when no product is selected so old previews don't linger.
+      const clearTag = (property: string) => {
+        const el = document.querySelector(`meta[property="${property}"]`);
+        if (el) el.setAttribute("content", "");
+      };
+      clearTag("og:title");
+      clearTag("og:description");
+      clearTag("og:image");
+      clearTag("og:url");
+      clearTag("twitter:title");
+      clearTag("twitter:description");
+      clearTag("twitter:image");
+      return;
+    }
+    const url = `${window.location.origin}/?product=${product.id}`;
+    const image = product.images[activeImage] || product.images[0] || "";
+    const description = `GHS ${product.price.toLocaleString()} — ${product.name}`;
+    const title = `${product.name} | WearWise`;
 
     const setMeta = (property: string, content: string) => {
       let el = document.querySelector(`meta[property="${property}"]`);
@@ -412,6 +427,7 @@ function App() {
       el.setAttribute("content", content);
     };
 
+    setMeta("og:type", "website");
     setMeta("og:title", title);
     setMeta("og:description", description);
     setMeta("og:image", image);
@@ -419,7 +435,7 @@ function App() {
     setMeta("twitter:title", title);
     setMeta("twitter:description", description);
     setMeta("twitter:image", image);
-  }, [selectedProduct]);
+  }, [selectedProduct, products, activeImage]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -1265,17 +1281,10 @@ function ProductDetail({
               aria-label="Share product"
               onClick={() => {
                 const url = `${window.location.origin}/?product=${product.id}`;
-                if (navigator.share) {
-                  navigator
-                    .share({
-                      title: product.name,
-                      text: `GHS ${product.price.toLocaleString()} — ${product.name}`,
-                      url,
-                    })
-                    .catch(() => fallbackShare(url));
-                } else {
-                  fallbackShare(url);
-                }
+                // Always use clipboard copy (not the native share) so the
+                // browser receives the URL and fetches the OG meta tags for
+                // the WhatsApp Status / SDDM share preview.
+                fallbackShare(url);
               }}
             >
               <img src="/share.png" alt="Share" className="share-icon" />
