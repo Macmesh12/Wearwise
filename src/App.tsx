@@ -269,6 +269,8 @@ function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedDesign, setSelectedDesign] = useState<Design | null>(null);
   const [toast, setToast] = useState("");
+  const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
+  const [activeImage, setActiveImage] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -379,6 +381,46 @@ function App() {
     }
   }, [catalogLoading, products, page]);
 
+  // PWA install prompt — let users add WearWise to their home screen.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as any);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // Update OG meta tags when a product is being viewed so shared links
+  // render a preview (image, name, price) on WhatsApp, Twitter, etc.
+  useEffect(() => {
+    const product = selectedProduct;
+    const url = `${window.location.origin}/?product=${product?.id ?? ""}`;
+    const image = product?.images[0] ?? "";
+    const description = product
+      ? `GHS ${product.price.toLocaleString()} — ${product.name}`
+      : "Ghanaian streetwear designed in Accra.";
+    const title = product ? `${product.name} | WearWise` : "WearWise | Ghanaian Streetwear";
+
+    const setMeta = (property: string, content: string) => {
+      let el = document.querySelector(`meta[property="${property}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute("property", property);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    };
+
+    setMeta("og:title", title);
+    setMeta("og:description", description);
+    setMeta("og:image", image);
+    setMeta("og:url", url);
+    setMeta("twitter:title", title);
+    setMeta("twitter:description", description);
+    setMeta("twitter:image", image);
+  }, [selectedProduct]);
+
   useEffect(() => {
     const onPopState = () => {
       const params = new URLSearchParams(window.location.search);
@@ -435,8 +477,9 @@ function App() {
         : next === "payment-return"
           ? "/payment-return"
           : "/";
-    if (window.location.pathname !== targetPath)
-      window.history.pushState({}, "", targetPath);
+    // Always update the URL so query params (e.g. ?product=) are cleared when
+    // navigating away from a shared product link.
+    window.history.pushState({}, "", targetPath);
     setMenuOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -551,6 +594,8 @@ function App() {
               }
               go={go}
               selectProduct={setSelectedProduct}
+              activeImage={activeImage}
+              setActiveImage={setActiveImage}
             />
           )}
           {page === "cart" && (
@@ -1014,12 +1059,16 @@ function ProductDetail({
   add,
   go,
   selectProduct,
+  activeImage,
+  setActiveImage,
 }: {
   product: Product;
   cartProduct?: Product | null;
   add: (quantity: number, size: string, color: string) => void;
   go: (p: Page) => void;
   selectProduct: (p: Product) => void;
+  activeImage: number;
+  setActiveImage: (i: number | ((prev: number) => number)) => void;
 }) {
   const { products } = useCatalog();
   const [qty, setQty] = useState(1);
@@ -1046,7 +1095,6 @@ function ProductDetail({
   }, [product, cartProduct, products]);
   const [size, setSize] = useState(product.sizeOptions[0] ?? "");
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
-  const [activeImage, setActiveImage] = useState(0);
   const [isAdded, setIsAdded] = useState(false);
   const [toast, setToast] = useState("");
   const [touchStartX, setTouchStartX] = useState(0);
