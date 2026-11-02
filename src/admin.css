@@ -1637,6 +1637,17 @@ code {
 .request-cover strong {
   font-size: 17px;
 }
+.order-cover {
+  height: 200px;
+  position: relative;
+  overflow: hidden;
+  background: #222;
+}
+.order-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .red-text {
   color: var(--a-red) !important;
 }

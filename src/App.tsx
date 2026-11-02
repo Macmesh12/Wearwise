@@ -1269,26 +1269,11 @@ function ProductDetail({
               </div>
             </Option>
           )}
-                 <div className="action-row">
+         <div className="action-row">
           <div className="action-group">
-            <Button variant="outline" className="wide" onClick={handleWhatsApp}>
               <Icon name="whatsapp" /> WhatsApp enquiry
-            </Button>
-          </div>
-          <div className="action-group">
-            <button
               className="share-btn"
-              aria-label="Share product"
-              onClick={() => {
-                const url = `${window.location.origin}/?product=${product.id}`;
-                // Always use clipboard copy (not the native share) so the
-                // browser receives the URL and fetches the OG meta tags for
-                // the WhatsApp Status / SDDM share preview.
-                fallbackShare(url);
-              }}
-            >
               <img src="/share.png" alt="Share" className="share-icon" />
-            </button>
           </div>
         </div>
           <div className="description">

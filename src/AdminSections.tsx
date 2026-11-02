@@ -273,9 +273,12 @@ export default function AdminSections({
       {page === "orders" && (
         <OrdersPage
           title={title}
-          rows={data.orders.filter((o) => o.order_type === "store_purchase")}
+          rows={data.orders.filter(
+            (o) => o.order_type === "store_purchase" || o.payment_status === "paid",
+          )}
           designs={data.designs}
           discounts={data.discounts}
+          products={data.products}
           onRefresh={onRefresh}
           say={say}
         />
@@ -283,9 +286,13 @@ export default function AdminSections({
       {page === "requests" && (
         <OrdersPage
           title={title}
-          rows={data.orders.filter((o) => o.order_type !== "store_purchase")}
+          rows={data.orders.filter(
+            (o) =>
+              o.order_type !== "store_purchase" && o.payment_status !== "paid",
+          )}
           designs={data.designs}
           discounts={data.discounts}
+          products={data.products}
           onRefresh={onRefresh}
           say={say}
         />
@@ -456,6 +463,7 @@ function OrdersPage({
   rows,
   discounts,
   designs,
+  products,
   onRefresh,
   say,
 }: {
@@ -463,6 +471,7 @@ function OrdersPage({
   rows: Order[];
   discounts: Discount[];
   designs: GalleryDesign[];
+  products: StoreItem[];
   onRefresh: () => void;
   say: (s: string) => void;
 }) {
@@ -902,6 +911,7 @@ function OrdersPage({
               setSelected({ ...selected, status });
             }}
             busy={busy === selected.id}
+            products={products}
           />
         ))}
     </>
@@ -933,14 +943,26 @@ function OrderDetailDrawer({
   editCosts,
   changeStatus,
   busy,
+  products,
 }: {
   row: Order;
   close: () => void;
   editCosts: () => void;
   changeStatus: (status: string) => void;
   busy: boolean;
+  products: StoreItem[];
 }) {
   const phone = row.customer_phone?.replace(/\D/g, "");
+  const isShopOrder = row.order_type === "store_purchase";
+  const productImage = useMemo(() => {
+    const item = row.order_items?.[0];
+    const product = products.find((p) => p.name === item.product_name_snapshot);
+    if (product?.preview_path) {
+      return supabase.storage.from("products").getPublicUrl(product.preview_path).data.publicUrl;
+    }
+    return "";
+  }, [row.order_items, products]);
+
   return (
     <Modal title={row.order_code} close={close}>
       <div className="drawer-status">
@@ -950,6 +972,11 @@ function OrderDetailDrawer({
           {Number(row.amount_paid).toLocaleString()}
         </span>
       </div>
+      {isShopOrder && productImage && (
+        <div className="order-cover">
+          <img src={productImage} alt={row.order_items?.[0]?.product_name_snapshot ?? "product"} />
+        </div>
+      )}
       <DrawerSection title="Customer">
         <div className="customer-card">
           <span>
