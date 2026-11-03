@@ -87,10 +87,19 @@ function getProductPrice(product: Product, size: string, color: string) {
     )?.price ?? product.price
   );
 }
+type DeliveryWindow = { minDays: number; maxDays: number };
+function formatDeliveryWindow(window: DeliveryWindow | null) {
+  if (!window) return "Delivery timeframe unavailable";
+  const dayLabel = (days: number) => `${days} day${days === 1 ? "" : "s"}`;
+  return window.minDays === window.maxDays
+    ? `within ${dayLabel(window.minDays)}`
+    : `within ${dayLabel(window.minDays)}–${dayLabel(window.maxDays)}`;
+}
 const CatalogContext = createContext<{
   products: Product[];
   designs: Design[];
-}>({ products: [], designs: [] });
+  deliveryWindow: DeliveryWindow | null;
+}>({ products: [], designs: [], deliveryWindow: null });
 const useCatalog = () => useContext(CatalogContext);
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -273,6 +282,9 @@ function TextArea({
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [designs, setDesigns] = useState<Design[]>([]);
+  const [deliveryWindow, setDeliveryWindow] = useState<DeliveryWindow | null>(
+    null,
+  );
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
@@ -324,7 +336,11 @@ function App() {
           .eq("status", "active"),
       ]);
       if (!active) return;
-      if (itemResult.error || designResult.error || variantResult.error)
+      if (
+        itemResult.error ||
+        designResult.error ||
+        variantResult.error
+      )
         setCatalogError(
           "We could not load the catalogue. Refresh to try again.",
         );
@@ -409,6 +425,47 @@ function App() {
       active = false;
     };
   }, [catalogReloadKey]);
+
+  useEffect(() => {
+    let active = true;
+    const loadDeliveryWindow = async () => {
+      if (window.location.pathname === "/admin") return;
+      const { data, error } = await supabase
+        .from("store_settings")
+        .select("delivery_min_days,delivery_max_days")
+        .eq("singleton", true)
+        .maybeSingle();
+      if (!active) return;
+      if (error) {
+        setDeliveryWindow(null);
+        setCatalogError(`Could not load delivery window: ${error.message}`);
+      } else if (data) {
+        setDeliveryWindow({
+          minDays: Number(data.delivery_min_days),
+          maxDays: Number(data.delivery_max_days),
+        });
+        setCatalogError((current) =>
+          current.startsWith("Could not load delivery window:")
+            ? ""
+            : current,
+        );
+      } else {
+        setDeliveryWindow(null);
+      }
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible")
+        void loadDeliveryWindow();
+    };
+    void loadDeliveryWindow();
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [page]);
 
   // Handle initial load with ?product=<id> query param
   useEffect(() => {
@@ -613,7 +670,7 @@ function App() {
   if (page === "payment-return") return <PaymentReturn go={go} />;
 
   return (
-    <CatalogContext.Provider value={{ products, designs }}>
+    <CatalogContext.Provider value={{ products, designs, deliveryWindow }}>
       <div className="app">
         <div className="ticker">
           <span>FREE DELIVERY TO ALL UNIVERSITIES WITHIN ACCRA</span>
@@ -1196,7 +1253,7 @@ function ProductDetail({
   activeImage: number;
   setActiveImage: (i: number | ((prev: number) => number)) => void;
 }) {
-  const { products } = useCatalog();
+  const { products, deliveryWindow } = useCatalog();
   const [qty, setQty] = useState(1);
 
   // Intelligent "you may also like": surface products from the same category as
@@ -1382,7 +1439,7 @@ function ProductDetail({
           <h1>{product.name}</h1>
           <div className="stock-line">
             <span className="status-dot" /> {product.stock}{" "}
-            <small>• Deliver within 1–2 days</small>
+            <small>• Delivery {formatDeliveryWindow(deliveryWindow)}</small>
           </div>
         </div>
         <div
@@ -1652,6 +1709,7 @@ function Cart({
   discount: AppliedDiscount | null;
   onDiscountApplied: (discount: AppliedDiscount | null) => void;
 }) {
+  const { deliveryWindow } = useCatalog();
   const count = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce(
     (sum, item) =>
@@ -1759,7 +1817,10 @@ function Cart({
             label="Subtotal"
             value={`GHS ${subtotal.toLocaleString()}`}
           />
-          <SummaryLine label="Delivery" value="Calculated at checkout" />
+          <SummaryLine
+            label="Estimated delivery"
+            value={formatDeliveryWindow(deliveryWindow)}
+          />
           <div className="discount">
             <Field
               label="Discount code"
@@ -1818,6 +1879,7 @@ function Checkout({
   items: CartLineItem[];
   discount: AppliedDiscount | null;
 }) {
+  const { deliveryWindow } = useCatalog();
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState<{
     campus_handoff_fee: number | string | null;
@@ -2071,6 +2133,10 @@ function Checkout({
             </button>
             <h1>Where should we deliver?</h1>
             <p>Delivery fees are managed by WearWise and updated here live.</p>
+            <div className="delivery-window-note">
+              <strong>Estimated delivery</strong>
+              <span>{formatDeliveryWindow(deliveryWindow)}</span>
+            </div>
             {areas.length > 0 ? (
               <>
                 <label className="field">
@@ -2157,6 +2223,10 @@ function Checkout({
             </button>
             <h1>Ready when you are.</h1>
             <p>Review your order before making payment.</p>
+            <div className="delivery-window-note">
+              <strong>Estimated delivery</strong>
+              <span>{formatDeliveryWindow(deliveryWindow)}</span>
+            </div>
             {items.length > 0 ? (
               <div className="mini-order">
                 {items.map((item) => {

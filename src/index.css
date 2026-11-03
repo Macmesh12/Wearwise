@@ -1097,6 +1097,23 @@ em {
   color: var(--gray-3);
   margin: -10px 0 12px;
 }
+.delivery-window-note {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--gray-2);
+  background: var(--white);
+  font-size: 13px;
+}
+.delivery-window-note strong {
+  font-weight: 700;
+}
+.delivery-window-note span {
+  color: var(--gray-3);
+  text-align: right;
+}
 .checkout-aside {
   background: var(--ink);
   color: var(--white);
