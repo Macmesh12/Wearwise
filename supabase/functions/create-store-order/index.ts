@@ -64,10 +64,83 @@ Deno.serve(async (request) => {
       error: "Review the checkout details and try again.",
     });
 
-  const itemId = cleanText(input.itemId, 50);
-  const quantity = Number(input.quantity);
-  const size = cleanText(input.size, 40);
-  const color = cleanText(input.color, 60);
+  if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 20) {
+    return jsonResponse(400, {
+      error: "Add between 1 and 20 items to your cart.",
+    });
+  }
+  const items: {
+    itemId: string;
+    quantity: number;
+    size: string;
+    color: string;
+    additionalCosts: { id: string; details: string }[];
+  }[] = [];
+  let totalQuantity = 0;
+  for (const rawItem of input.items as unknown[]) {
+    if (!rawItem || typeof rawItem !== "object") {
+      return jsonResponse(400, {
+        error: "Review your cart and try again.",
+      });
+    }
+    const line = rawItem as Record<string, unknown>;
+    const itemId = cleanText(line.itemId, 50);
+    const quantity = Number(line.quantity);
+    if (!/^[0-9a-f-]{36}$/i.test(itemId)) {
+      return jsonResponse(400, {
+        error: "A shop item in your cart could not be found.",
+      });
+    }
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+      return jsonResponse(400, {
+        error: "Choose a quantity between 1 and 20 for each item.",
+      });
+    }
+    if (
+      line.additionalCosts !== undefined &&
+      !Array.isArray(line.additionalCosts)
+    ) {
+      return jsonResponse(400, {
+        error: "Review the selected product options and try again.",
+      });
+    }
+    const additionalCosts: { id: string; details: string }[] = [];
+    for (const rawOption of (line.additionalCosts ?? []) as unknown[]) {
+      if (!rawOption || typeof rawOption !== "object") {
+        return jsonResponse(400, {
+          error: "Review the selected product options and try again.",
+        });
+      }
+      const option = rawOption as Record<string, unknown>;
+      const id = cleanText(option.id, 50);
+      if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        return jsonResponse(400, {
+          error: "Review the selected product options and try again.",
+        });
+      }
+      additionalCosts.push({
+        id,
+        details: cleanText(option.details, 200),
+      });
+    }
+    if (additionalCosts.length > 20) {
+      return jsonResponse(400, {
+        error: "Too many additional options were selected.",
+      });
+    }
+    totalQuantity += quantity;
+    items.push({
+      itemId,
+      quantity,
+      size: cleanText(line.size, 40),
+      color: cleanText(line.color, 60),
+      additionalCosts,
+    });
+  }
+  if (totalQuantity > 20)
+    return jsonResponse(400, {
+      error: "Your cart is limited to 20 items.",
+    });
   const customer =
     input.customer && typeof input.customer === "object" ? input.customer : {};
   const delivery =
@@ -78,10 +151,6 @@ Deno.serve(async (request) => {
   const customerEmail = cleanText(customer.email, 160).toLowerCase();
   const deliveryRegion = cleanText(delivery.region, 120);
 
-  if (!/^[0-9a-f-]{36}$/i.test(itemId))
-    return jsonResponse(400, { error: "That shop item could not be found." });
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20)
-    return jsonResponse(400, { error: "Choose a quantity between 1 and 20." });
   if (customerName.length < 2 || customerPhone.replace(/\D/g, "").length < 7) {
     return jsonResponse(400, {
       error: "Enter your name and a valid phone number.",
@@ -95,10 +164,7 @@ Deno.serve(async (request) => {
 
 
   const { data, error } = await admin.rpc("create_store_purchase_with_area", {
-    p_item_id: itemId,
-    p_quantity: quantity,
-    p_size: size,
-    p_color: color,
+    p_items: items,
     p_customer_name: customerName,
     p_customer_phone: customerPhone,
     p_customer_email: customerEmail,

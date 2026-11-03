@@ -2903,3 +2903,52 @@ footer {
     height: 30px;
   }
 }
+
+.additional-cost-options {
+  display: grid;
+  gap: 12px;
+}
+.additional-cost-option {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--gray-2);
+  border-radius: 10px;
+}
+.additional-cost-option > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.additional-cost-option input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--ink);
+}
+.additional-cost-option strong {
+  margin-left: 6px;
+}
+.product-purchase {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.product-purchase .btn {
+  flex: 1;
+}
+.whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--gray-2);
+  border-radius: 999px;
+  background: var(--white);
+  cursor: pointer;
+}
+.whatsapp-btn:hover {
+  background: var(--gray-2);
+}

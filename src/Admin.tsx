@@ -48,16 +48,6 @@ type AdminOrder = {
   payment_link: string | null;
   payment_link_expiry: string | null;
   approval_status: string;
-  cost_price_locked: number | string | null;
-  supplier_cost: number | string | null;
-  profit: number | string | null;
-  cost_locked_at: string | null;
-  actual_sourcing_cost: number | string;
-  actual_printing_cost: number | string;
-  actual_delivery_cost: number | string;
-  actual_payment_fee: number | string;
-  actual_other_cost: number | string;
-  actual_costs_recorded_at: string | null;
   created_at: string;
   order_items?: {
     quantity: number;
@@ -66,6 +56,13 @@ type AdminOrder = {
     requested_size: string | null;
     requested_color: string | null;
     quoted_unit_price: number | string;
+    estimated_unit_cost: number | string | null;
+    additional_costs: {
+      id: string;
+      name: string;
+      price: number | string;
+      details: string;
+    }[];
   }[];
 };
 type StoreItem = {
@@ -78,11 +75,15 @@ type StoreItem = {
   image_paths: string[];
   size_options: string[];
   color_options: string[];
+  additional_cost_options: {
+    id: string;
+    name: string;
+    price: number | string;
+    details_prompt: string;
+  }[];
   is_published: boolean;
   is_available: boolean;
   stock_quantity: number | null;
-  purchase_cost?: number | string | null;
-  other_cost?: number | string | null;
 };
 type Category = {
   id: string;
@@ -146,11 +147,6 @@ type StoreSettings = {
   delivery_min_days: number;
   delivery_max_days: number;
   urgent_fee_per_day_percent: number;
-};
-type ItemCost = {
-  store_item_id: string;
-  purchase_cost: number | string | null;
-  other_cost: number | string | null;
 };
 type ProductVariant = {
   id: string;
@@ -306,7 +302,6 @@ function Admin({
         productTotal,
         recentOrders,
         products,
-        itemCosts,
         variants,
         variantCosts,
         designs,
@@ -320,7 +315,10 @@ function Admin({
         preferences,
         notifications,
       ] = await Promise.all([
-        supabase.from("orders").select("id", { count: "exact", head: true }),
+        supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .or("order_type.eq.store_purchase,payment_status.eq.paid"),
         supabase
           .from("orders")
           .select("id", { count: "exact", head: true })
@@ -332,20 +330,17 @@ function Admin({
         supabase
           .from("orders")
           .select(
-            "id,order_code,order_type,status,payment_status,customer_name,customer_phone,customer_email,customer_request,customer_artwork_path,selected_design_snapshot,proof_image_path,delivery_area,delivery_address,delivery_instructions,subtotal,discount_amount,discount_id,delivery_fee,rush_fee,total_amount,amount_paid,amount_refunded,currency_code,rush_days_early,availability_confirmed_at,payment_link,payment_link_expiry,approval_status,cost_price_locked,supplier_cost,profit,cost_locked_at,actual_sourcing_cost,actual_printing_cost,actual_delivery_cost,actual_payment_fee,actual_other_cost,actual_costs_recorded_at,created_at,order_items(quantity,store_item_id,product_name_snapshot,requested_size,requested_color,quoted_unit_price)",
+            "id,order_code,order_type,status,payment_status,customer_name,customer_phone,customer_email,customer_request,customer_artwork_path,selected_design_snapshot,proof_image_path,delivery_area,delivery_address,delivery_instructions,subtotal,discount_amount,discount_id,delivery_fee,rush_fee,total_amount,amount_paid,amount_refunded,currency_code,rush_days_early,availability_confirmed_at,payment_link,payment_link_expiry,approval_status,created_at,order_items(quantity,store_item_id,product_name_snapshot,requested_size,requested_color,quoted_unit_price,estimated_unit_cost,additional_costs)",
           )
           .order("created_at", { ascending: false })
           .limit(1000),
         supabase
           .from("store_items")
           .select(
-            "id,name,category,category_id,description,price,image_paths,size_options,color_options,is_published,is_available,stock_quantity",
+            "id,name,category,category_id,description,price,image_paths,size_options,color_options,additional_cost_options,is_published,is_available,stock_quantity",
           )
           .order("created_at", { ascending: false })
           .limit(500),
-        supabase
-          .from("store_item_costs")
-          .select("store_item_id,purchase_cost,other_cost"),
         supabase
           .from("product_variants")
           .select("id,product_id,size,color,stock,selling_price,status")
@@ -420,7 +415,6 @@ function Admin({
         productTotal.error ??
         recentOrders.error ??
         products.error ??
-        itemCosts.error ??
         variants.error ??
         variantCosts.error ??
         designs.error ??
@@ -434,19 +428,7 @@ function Admin({
         preferences.error ??
         notifications.error;
       if (queryError) setDataError(queryError.message);
-      const costs = new Map<string, ItemCost>(
-        ((itemCosts.data ?? []) as ItemCost[]).map((cost) => [
-          cost.store_item_id,
-          cost,
-        ]),
-      );
-      const mappedProducts = ((products.data ?? []) as StoreItem[]).map(
-        (item) => ({
-          ...item,
-          purchase_cost: costs.get(item.id)?.purchase_cost ?? null,
-          other_cost: costs.get(item.id)?.other_cost ?? null,
-        }),
-      );
+      const mappedProducts = (products.data ?? []) as StoreItem[];
       const variantCostMap = new Map<string, VariantCost>(
         ((variantCosts.data ?? []) as VariantCost[]).map((cost) => [
           cost.variant_id,
@@ -660,7 +642,9 @@ function Admin({
     0,
   );
   const requests = data.orders.filter(
-    (order) => order.order_type !== "store_purchase",
+    (order) =>
+      order.order_type !== "store_purchase" &&
+      order.payment_status !== "paid",
   );
   const urgentOrders = data.orders.filter(
     (order) =>
@@ -861,6 +845,7 @@ function Dashboard({
     .filter(
       (order) =>
         order.order_type !== "store_purchase" &&
+        order.payment_status !== "paid" &&
         ["request_received", "awaiting_payment"].includes(order.status),
     )
     .slice(0, 3);

@@ -42,16 +42,6 @@ type Order = {
   payment_link?: string | null;
   payment_link_expiry?: string | null;
   approval_status?: string;
-  cost_price_locked?: number | string | null;
-  supplier_cost?: number | string | null;
-  profit?: number | string | null;
-  cost_locked_at?: string | null;
-  actual_sourcing_cost: number | string;
-  actual_printing_cost: number | string;
-  actual_delivery_cost: number | string;
-  actual_payment_fee: number | string;
-  actual_other_cost: number | string;
-  actual_costs_recorded_at: string | null;
   created_at: string;
   order_items?: {
     quantity: number;
@@ -60,6 +50,13 @@ type Order = {
     requested_size: string | null;
     requested_color: string | null;
     quoted_unit_price: number | string;
+    estimated_unit_cost: number | string | null;
+    additional_costs: {
+      id: string;
+      name: string;
+      price: number | string;
+      details: string;
+    }[];
   }[];
 };
 type StoreItem = {
@@ -72,11 +69,10 @@ type StoreItem = {
   image_paths: string[];
   size_options: string[];
   color_options: string[];
+  additional_cost_options: AdditionalCostOption[];
   is_published: boolean;
   is_available: boolean;
   stock_quantity: number | null;
-  purchase_cost?: number | string | null;
-  other_cost?: number | string | null;
 };
 type ProductVariant = {
   id: string;
@@ -94,6 +90,12 @@ type VariantDraft = {
   stock: string;
   selling_price: string;
   cost_price: string;
+};
+type AdditionalCostOption = {
+  id: string;
+  name: string;
+  price: number | string;
+  details_prompt: string;
 };
 type GalleryDesign = {
   id: string;
@@ -476,7 +478,6 @@ function OrdersPage({
   say: (s: string) => void;
 }) {
   const [busy, setBusy] = useState("");
-  const [costEditing, setCostEditing] = useState<Order | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -534,53 +535,6 @@ function OrdersPage({
       say(`${isRequests ? "Request" : "Order"} deleted.`);
       onRefresh();
     }
-  }
-  async function saveCosts(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!costEditing) return;
-    setBusy(costEditing.id);
-    const f = new FormData(e.currentTarget),
-      value = (key: string) => {
-        const raw = String(f.get(key) ?? "").trim();
-        return raw === "" ? 0 : Number(raw);
-      };
-    const sourcing = value("sourcing"),
-      printing = value("printing"),
-      delivery = value("delivery"),
-      payment = value("payment"),
-      other = value("other"),
-      locked = f.get("lock") === "on",
-      now = new Date().toISOString();
-    const costs = {
-      actual_sourcing_cost: sourcing,
-      actual_printing_cost: printing,
-      actual_delivery_cost: delivery,
-      actual_payment_fee: payment,
-      actual_other_cost: other,
-      actual_costs_recorded_at: now,
-      cost_price_locked: locked ? sourcing : null,
-      supplier_cost: locked ? sourcing : null,
-      profit: locked
-        ? Number(costEditing.total_amount) -
-          sourcing -
-          printing -
-          delivery -
-          payment -
-          other
-        : null,
-      cost_locked_at: locked ? now : null,
-    };
-    const { error } = await supabase
-      .from("orders")
-      .update(costs)
-      .eq("id", costEditing.id);
-    if (error) say(`Could not save order costs: ${error.message}`);
-    else {
-      say("Order costs saved for analytics.");
-      setCostEditing(null);
-      onRefresh();
-    }
-    setBusy("");
   }
   return (
     <>
@@ -709,7 +663,6 @@ function OrdersPage({
                 {!isRequests && <th>PAYMENT</th>}
                 <th>STATUS</th>
                 {!isRequests && <th>AREA</th>}
-                <th>COSTS</th>
                 <th>ACTIONS</th>
               </tr>
             </thead>
@@ -809,17 +762,6 @@ function OrdersPage({
                   {!isRequests && <td>{o.delivery_area ?? "—"}</td>}
                   <td>
                     <button
-                      className="table-link"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setCostEditing(o);
-                      }}
-                    >
-                      {o.actual_costs_recorded_at ? "Edit" : "Add"}
-                    </button>
-                  </td>
-                  <td>
-                    <button
                       className="table-link danger"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -838,56 +780,6 @@ function OrdersPage({
           )}
         </div>
       </section>
-      {costEditing && (
-        <Modal
-          title={`Actual costs · ${costEditing.order_code}`}
-          close={() => setCostEditing(null)}
-        >
-          <form className="admin-form-grid" onSubmit={(e) => void saveCosts(e)}>
-            {[
-              ["Sourcing", "sourcing", costEditing.actual_sourcing_cost],
-              ["Printing", "printing", costEditing.actual_printing_cost],
-              ["Delivery", "delivery", costEditing.actual_delivery_cost],
-              ["Payment fee", "payment", costEditing.actual_payment_fee],
-              ["Other", "other", costEditing.actual_other_cost],
-            ].map(([label, key, value]) => (
-              <label key={String(key)}>
-                {String(label)} (GHS)
-                <input
-                  name={String(key)}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  defaultValue={value == null ? "" : String(value)}
-                />
-              </label>
-            ))}
-            <label className="admin-check admin-form-wide">
-              <input
-                type="checkbox"
-                name="lock"
-                defaultChecked={Boolean(costEditing.cost_locked_at)}
-              />
-              Lock cost after saving
-            </label>
-            <div className="admin-form-actions admin-form-wide">
-              <button
-                type="button"
-                className="drawer-secondary"
-                onClick={() => setCostEditing(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="a-button dark"
-                disabled={busy === costEditing.id}
-              >
-                {busy === costEditing.id ? "Saving…" : "Save actual costs"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
       {selected &&
         (isRequests ? (
           <RequestQuoteDrawer
@@ -902,16 +794,13 @@ function OrdersPage({
           <OrderDetailDrawer
             row={selected}
             close={() => setSelected(null)}
-            editCosts={() => {
-              setCostEditing(selected);
-              setSelected(null);
-            }}
             changeStatus={(status) => {
               void change(selected.id, status);
               setSelected({ ...selected, status });
             }}
             busy={busy === selected.id}
             products={products}
+            designs={designs}
           />
         ))}
     </>
@@ -940,28 +829,83 @@ function DrawerSection({
 function OrderDetailDrawer({
   row,
   close,
-  editCosts,
   changeStatus,
   busy,
   products,
+  designs,
 }: {
   row: Order;
   close: () => void;
-  editCosts: () => void;
   changeStatus: (status: string) => void;
   busy: boolean;
   products: StoreItem[];
+  designs: GalleryDesign[];
 }) {
   const phone = row.customer_phone?.replace(/\D/g, "");
   const isShopOrder = row.order_type === "store_purchase";
+  const designImage = useMemo(() => {
+    const snapshot =
+      typeof row.selected_design_snapshot === "object" &&
+      row.selected_design_snapshot !== null
+        ? (row.selected_design_snapshot as Record<string, unknown>)
+        : {};
+    const path = String(snapshot.preview_path ?? snapshot.image_path ?? "");
+    if (path)
+      return supabase.storage.from("designs").getPublicUrl(path).data.publicUrl;
+    const title = String(snapshot.title ?? snapshot.name ?? "");
+    const design = designs.find((item) => item.title === title);
+    return design
+      ? supabase.storage
+          .from("designs")
+          .getPublicUrl(design.preview_path || design.image_path).data.publicUrl
+      : "";
+  }, [row.selected_design_snapshot, designs]);
   const productImage = useMemo(() => {
     const item = row.order_items?.[0];
-    const product = products.find((p) => p.name === item.product_name_snapshot);
-    if (product?.preview_path) {
-      return supabase.storage.from("products").getPublicUrl(product.preview_path).data.publicUrl;
-    }
-    return "";
+    const product = products.find((p) => p.id === item?.store_item_id);
+    const colorIndex = product?.color_options.indexOf(item?.requested_color ?? "") ?? -1;
+    const path =
+      product?.image_paths?.[colorIndex >= 0 ? colorIndex : 0];
+    return path
+      ? supabase.storage.from("store-items").getPublicUrl(path).data.publicUrl
+      : "";
   }, [row.order_items, products]);
+  const [customerArtworkUrl, setCustomerArtworkUrl] = useState("");
+  const [customerArtworkError, setCustomerArtworkError] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (row.customer_artwork_path)
+      void supabase.storage
+        .from("customer-artwork")
+        .createSignedUrl(row.customer_artwork_path, 3600)
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error) setCustomerArtworkError(error.message);
+          else setCustomerArtworkUrl(data?.signedUrl ?? "");
+        });
+    return () => {
+      active = false;
+    };
+  }, [row.customer_artwork_path]);
+  const coverImage = isShopOrder ? productImage : designImage || customerArtworkUrl;
+  const costPricesAvailable = Boolean(
+    row.order_items?.length &&
+      row.order_items.every((item) => item.estimated_unit_cost != null),
+  );
+  const productCostPrice = costPricesAvailable
+    ? (row.order_items ?? []).reduce(
+        (sum, item) =>
+          sum +
+          Number(item.estimated_unit_cost) * Number(item.quantity),
+        0,
+      )
+    : null;
+  const estimatedItemProfit =
+    productCostPrice === null
+      ? null
+      : Number(row.subtotal ?? 0) -
+        Number(row.discount_amount ?? 0) -
+        productCostPrice;
 
   return (
     <Modal title={row.order_code} close={close}>
@@ -972,10 +916,22 @@ function OrderDetailDrawer({
           {Number(row.amount_paid).toLocaleString()}
         </span>
       </div>
-      {isShopOrder && productImage && (
+      {coverImage && (
         <div className="order-cover">
-          <img src={productImage} alt={row.order_items?.[0]?.product_name_snapshot ?? "product"} />
+          <img
+            src={coverImage}
+            alt={
+              isShopOrder
+                ? row.order_items?.[0]?.product_name_snapshot ?? "product"
+                : "Requested design"
+            }
+          />
         </div>
+      )}
+      {customerArtworkError && (
+        <p className="admin-data-error" role="alert">
+          Could not load the customer artwork preview: {customerArtworkError}
+        </p>
       )}
       <DrawerSection title="Customer">
         <div className="customer-card">
@@ -1008,6 +964,13 @@ function OrderDetailDrawer({
                   <small>
                     Size {item.requested_size ?? "—"} ·{" "}
                     {item.requested_color ?? "—"} · Qty {item.quantity}
+                    {item.additional_costs?.map((option) => (
+                      <span key={option.id}>
+                        {" "}
+                        · {option.name}
+                        {option.details ? `: ${option.details}` : ""}
+                      </span>
+                    ))}
                   </small>
                 </span>
                 <b>
@@ -1058,14 +1021,28 @@ function OrderDetailDrawer({
           </span>
         </div>
       </DrawerSection>
-      <DrawerSection title="Private cost & profit">
-        <p>These values are private to the store owner.</p>
-        <button className="a-button dark" onClick={editCosts}>
-          {row.actual_costs_recorded_at
-            ? "Edit actual costs"
-            : "Add actual costs"}
-        </button>
-      </DrawerSection>
+      {isShopOrder && (
+        <DrawerSection title="Cost price & estimated profit">
+          <div className="detail-grid">
+            <span>
+              Product cost price total
+              <b>
+                {productCostPrice === null
+                  ? "Not recorded"
+                  : `GHS ${productCostPrice.toLocaleString()}`}
+              </b>
+            </span>
+            <span>
+              Estimated item profit
+              <b>
+                {estimatedItemProfit === null
+                  ? "Unavailable"
+                  : `GHS ${estimatedItemProfit.toLocaleString()}`}
+              </b>
+            </span>
+          </div>
+        </DrawerSection>
+      )}
       <DrawerSection title="Fulfillment update">
         <label className="drawer-fields">
           Status
@@ -1163,15 +1140,20 @@ function RequestQuoteDrawer({
       supabase.storage
         .from("order-proofs")
         .createSignedUrl(row.proof_image_path, 3600)
-        .then(({ data }) => {
-          if (active) setProofUrl(data?.signedUrl ?? "");
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error) say(`Could not load the proof preview: ${error.message}`);
+          else setProofUrl(data?.signedUrl ?? "");
         });
     if (row.customer_artwork_path)
       supabase.storage
         .from("customer-artwork")
         .createSignedUrl(row.customer_artwork_path, 3600)
-        .then(({ data }) => {
-          if (active) setCustomerArtworkUrl(data?.signedUrl ?? "");
+        .then(({ data, error }) => {
+          if (!active) return;
+          if (error)
+            say(`Could not load the customer artwork preview: ${error.message}`);
+          else setCustomerArtworkUrl(data?.signedUrl ?? "");
         });
     return () => {
       active = false;
@@ -1671,6 +1653,16 @@ function RequestQuoteDrawer({
       </DrawerSection>
       {row.customer_artwork_path && (
         <DrawerSection title="Customer artwork">
+          {customerArtworkUrl && (
+            <a href={customerArtworkUrl} target="_blank" rel="noreferrer">
+              <div className="order-cover">
+                <img
+                  src={customerArtworkUrl}
+                  alt="Customer-provided design reference"
+                />
+              </div>
+            </a>
+          )}
           <a
             className="table-link"
             href={customerArtworkUrl}
@@ -1682,27 +1674,6 @@ function RequestQuoteDrawer({
           <small>Private upload · {row.customer_artwork_path}</small>
         </DrawerSection>
       )}
-      <DrawerSection title="Locked costs">
-        <div className="drawer-fields two">
-          <label>
-            Actual sourcing cost
-            <div className="money-input">
-              <span>GHS</span>
-              <input value={row.actual_sourcing_cost} readOnly />
-            </div>
-          </label>
-          <label>
-            Actual printing cost
-            <div className="money-input">
-              <span>GHS</span>
-              <input value={row.actual_printing_cost} readOnly />
-            </div>
-          </label>
-        </div>
-        <button type="button" className="table-link" onClick={close}>
-          Use order cost editor
-        </button>
-      </DrawerSection>
     </Modal>
   );
 }
@@ -2020,6 +1991,9 @@ function ProductsPage({
   const [globalSellingPrice, setGlobalSellingPrice] = useState("");
   const [globalCostPrice, setGlobalCostPrice] = useState("");
   const [globalStock, setGlobalStock] = useState("10");
+  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCostOption[]>(
+    [],
+  );
   const [imagePathsToDelete, setImagePathsToDelete] = useState<string[]>([]);
   // colorImageMap[i] = colour assigned to image_paths[i] (magnet pairing).
   // Keeps colours and images aligned: reordering one reorders the other.
@@ -2060,9 +2034,10 @@ function ProductsPage({
               color: item.color_options[0] ?? "",
               stock: String(item.stock_quantity ?? 0),
               selling_price: String(item.price),
-              cost_price: String(item.purchase_cost ?? ""),
+              cost_price: "",
             })),
       );
+      setAdditionalCosts(item.additional_cost_options ?? []);
       // Initialize colour-image magnet map: pair each image with a colour.
       // If fewer colours than images, repeat the last colour; if more colours
       // than images, truncate to image count.
@@ -2089,6 +2064,7 @@ function ProductsPage({
       setGlobalSellingPrice("");
       setGlobalCostPrice("");
       setGlobalStock("10");
+      setAdditionalCosts([]);
       setColorImageMap([]);
       setOrderedSizeOptions([]);
       setOrderedImagePaths([]);
@@ -2202,13 +2178,19 @@ function ProductsPage({
           Number(v.stock) < 0 ||
           !Number.isFinite(Number(v.selling_price)) ||
           Number(v.selling_price) <= 0 ||
-          (v.cost_price !== "" &&
-            (!Number.isFinite(Number(v.cost_price)) ||
-              Number(v.cost_price) < 0)),
+          v.cost_price.trim() === "" ||
+          !Number.isFinite(Number(v.cost_price)) ||
+          Number(v.cost_price) < 0,
+      ) ||
+      additionalCosts.some(
+        (option) =>
+          !option.name.trim() ||
+          !Number.isFinite(Number(option.price)) ||
+          Number(option.price) < 0,
       )
     ) {
       say(
-        "Add at least one valid size and colour variant with stock and selling price.",
+        "Add valid variants with stock, selling price and cost price; additional costs need a name and valid price.",
       );
       setBusy(false);
       return;
@@ -2231,6 +2213,12 @@ function ProductsPage({
       // colour_options aligned with image_paths (magnet pairing): unique colours
       // from the per-image colour map, in image order.
       color_options: [...new Set(finalColorMap.filter((c) => c.trim()))],
+      additional_cost_options: additionalCosts.map((option) => ({
+        ...option,
+        name: option.name.trim(),
+        price: Number(option.price),
+        details_prompt: option.details_prompt.trim(),
+      })),
       is_available: f.get("available") === "on",
       is_published: f.get("published") === "on",
       stock_quantity: stock,
@@ -2287,7 +2275,7 @@ function ProductsPage({
       const draft = validVariants.find(
         (row) => row.size.trim() === v.size && row.color.trim() === v.color,
       );
-      return draft && draft.cost_price !== ""
+      return draft
         ? [
             {
               variant_id: v.id,
@@ -2309,18 +2297,7 @@ function ProductsPage({
         return;
       }
     }
-    const { error: costError } = await supabase.from("store_item_costs").upsert(
-      {
-        store_item_id: productId,
-        purchase_cost: null,
-        other_cost: f.get("other_cost") ? Number(f.get("other_cost")) : null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "store_item_id" },
-    );
-    if (costError)
-      say(`Product saved, cost could not be saved: ${costError.message}`);
-    else say(id ? "Product updated." : "Product added.");
+    say(id ? "Product updated." : "Product added.");
     setEditing(null);
     setImagePathsToDelete([]);
     setOrderedImagePaths([]);
@@ -2404,7 +2381,17 @@ function ProductsPage({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((r) => (
+                {visible.map((r) => {
+                  const costs = variants
+                    .filter(
+                      (variant) =>
+                        variant.product_id === r.id &&
+                        variant.cost_price != null,
+                    )
+                    .map((variant) => Number(variant.cost_price));
+                  const minCost = Math.min(...costs);
+                  const maxCost = Math.max(...costs);
+                  return (
                   <tr key={r.id}>
                     <td>
                       <input type="checkbox" aria-label={`Select ${r.name}`} />
@@ -2429,9 +2416,11 @@ function ProductsPage({
                       <strong>GHS {Number(r.price).toLocaleString()}</strong>
                     </td>
                     <td className="muted">
-                      {r.purchase_cost == null
+                      {costs.length === 0
                         ? "—"
-                        : `GHS ${Number(r.purchase_cost).toLocaleString()}`}
+                        : minCost === maxCost
+                          ? `GHS ${minCost.toLocaleString()}`
+                          : `GHS ${minCost.toLocaleString()}–${maxCost.toLocaleString()}`}
                     </td>
                     <td>
                       <b
@@ -2468,7 +2457,8 @@ function ProductsPage({
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           ) : (
@@ -2581,16 +2571,6 @@ function ProductsPage({
               name="price"
               value={drafts[0]?.selling_price ?? current?.price ?? ""}
             />
-            <label className="admin-form-wide">
-              Other costs (private, GHS)
-              <input
-                name="other_cost"
-                type="number"
-                min="0"
-                step="0.01"
-                defaultValue={current?.other_cost ?? ""}
-              />
-            </label>
             <div className="admin-form-wide">
               <div className="drawer-section-head">
                 <h3>Variants builder</h3>
@@ -2748,7 +2728,24 @@ function ProductsPage({
                           <td>{v.color}</td>
                           <td>{v.stock}</td>
                           <td>{v.selling_price}</td>
-                          <td>{v.cost_price}</td>
+                          <td>
+                            <input
+                              aria-label={`Cost price for ${v.size} ${v.color}`}
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={v.cost_price}
+                              onChange={(event) =>
+                                setDrafts((currentDrafts) =>
+                                  currentDrafts.map((draft, draftIndex) =>
+                                    draftIndex === index
+                                      ? { ...draft, cost_price: event.target.value }
+                                      : draft,
+                                  ),
+                                )
+                              }
+                            />
+                          </td>
                           <td>
                             <button
                               type="button"
@@ -2768,6 +2765,98 @@ function ProductsPage({
                   </p>
                 </div>
               )}
+            </div>
+            <div className="admin-form-wide">
+              <div className="drawer-section-head">
+                <h3>Optional additional costs</h3>
+                <button
+                  type="button"
+                  className="a-button light"
+                  onClick={() =>
+                    setAdditionalCosts((currentCosts) => [
+                      ...currentCosts,
+                      {
+                        id: crypto.randomUUID(),
+                        name: "",
+                        price: "",
+                        details_prompt: "",
+                      },
+                    ])
+                  }
+                >
+                  Add option
+                </button>
+              </div>
+              {additionalCosts.map((option, index) => (
+                <div className="additional-cost-admin" key={option.id}>
+                  <label>
+                    Option name
+                    <input
+                      required
+                      value={option.name}
+                      placeholder="e.g. Name and number"
+                      onChange={(event) =>
+                        setAdditionalCosts((currentCosts) =>
+                          currentCosts.map((currentOption, optionIndex) =>
+                            optionIndex === index
+                              ? { ...currentOption, name: event.target.value }
+                              : currentOption,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Customer price (GHS)
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={option.price}
+                      onChange={(event) =>
+                        setAdditionalCosts((currentCosts) =>
+                          currentCosts.map((currentOption, optionIndex) =>
+                            optionIndex === index
+                              ? { ...currentOption, price: event.target.value }
+                              : currentOption,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="admin-form-wide">
+                    Details prompt (optional; required from customers when selected)
+                    <input
+                      value={option.details_prompt}
+                      placeholder="e.g. Enter the name and number"
+                      onChange={(event) =>
+                        setAdditionalCosts((currentCosts) =>
+                          currentCosts.map((currentOption, optionIndex) =>
+                            optionIndex === index
+                              ? {
+                                  ...currentOption,
+                                  details_prompt: event.target.value,
+                                }
+                              : currentOption,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="table-link danger"
+                    onClick={() =>
+                      setAdditionalCosts((currentCosts) =>
+                        currentCosts.filter((_, optionIndex) => optionIndex !== index),
+                      )
+                    }
+                  >
+                    Remove option
+                  </button>
+                </div>
+              ))}
             </div>
             <label className="admin-form-wide">
               Description
@@ -3646,7 +3735,6 @@ function PaymentsPage({
                 <th>PAYSTACK REF</th>
                 <th>LINKED CODE</th>
                 <th>AMOUNT</th>
-                <th>PAYSTACK FEE</th>
                 <th>STATUS</th>
                 <th>DATE</th>
                 <th />
@@ -3654,9 +3742,6 @@ function PaymentsPage({
             </thead>
             <tbody>
               {filtered.map((r) => {
-                const fee = orders.find(
-                  (o) => o.id === r.order_id,
-                )?.actual_payment_fee;
                 return (
                   <tr key={r.id}>
                     <td>
@@ -3671,11 +3756,6 @@ function PaymentsPage({
                       <strong>
                         {r.currency_code} {Number(r.amount).toLocaleString()}
                       </strong>
-                    </td>
-                    <td className="muted">
-                      {fee == null
-                        ? "—"
-                        : `${r.currency_code} ${Number(fee).toLocaleString()}`}
                     </td>
                     <td>
                       <Status>{r.status}</Status>
@@ -4285,39 +4365,36 @@ function AnalyticsPage({
           date < new Date(now.getFullYear(), now.getMonth(), now.getDate())
         : date >= start;
   });
-  const paid = filtered.filter((o) => Number(o.amount_paid) > 0),
+  const paid = filtered.filter(
+    (o) => o.payment_status === "paid" && Number(o.amount_paid) > 0,
+  ),
     sales = paid.reduce(
       (s, o) => s + Number(o.amount_paid) - Number(o.amount_refunded),
       0,
     ),
     refunds = filtered.reduce((s, o) => s + Number(o.amount_refunded), 0),
-    costComplete = filtered.filter((o) => o.actual_costs_recorded_at),
-    coreCosts = costComplete.reduce(
+    costComplete = paid.filter(
+      (o) =>
+        o.order_type === "store_purchase" &&
+        Boolean(o.order_items?.length) &&
+        o.order_items?.every((item) => item.estimated_unit_cost != null),
+    ),
+    costPriceTotal = costComplete.reduce(
       (s, o) =>
         s +
-        Number(o.actual_sourcing_cost) +
-        Number(o.actual_printing_cost) +
-        Number(o.actual_other_cost),
+        (o.order_items ?? []).reduce(
+          (itemCost, item) =>
+            itemCost +
+            Number(item.estimated_unit_cost) * Number(item.quantity),
+          0,
+        ),
       0,
     ),
-    feeCosts = costComplete.reduce(
-      (s, o) => s + Number(o.actual_payment_fee),
+    costPricedSales = costComplete.reduce(
+      (s, o) => s + Number(o.amount_paid) - Number(o.amount_refunded),
       0,
     ),
     deliveryRevenue = paid.reduce((s, o) => s + Number(o.delivery_fee ?? 0), 0),
-    gross = sales - coreCosts,
-    net =
-      sales -
-      costComplete.reduce(
-        (s, o) =>
-          s +
-          Number(o.actual_sourcing_cost) +
-          Number(o.actual_printing_cost) +
-          Number(o.actual_delivery_cost) +
-          Number(o.actual_payment_fee) +
-          Number(o.actual_other_cost),
-        0,
-      ),
     discounts = paid.reduce((s, o) => s + Number(o.discount_amount ?? 0), 0),
     shop = paid
       .filter((o) => o.order_type === "store_purchase")
@@ -4325,8 +4402,9 @@ function AnalyticsPage({
         (s, o) => s + Number(o.amount_paid) - Number(o.amount_refunded),
         0,
       ),
+    estimatedProfit = costPricedSales - costPriceTotal,
     explore = sales - shop,
-    urgent = filtered.filter((o) => o.rush_days_early > 0),
+    urgent = paid.filter((o) => o.rush_days_early > 0),
     urgentFees = urgent.reduce((s, o) => s + Number(o.rush_fee ?? 0), 0);
   const kpis: [string, string, string][] = [
     [
@@ -4336,8 +4414,8 @@ function AnalyticsPage({
     ],
     [
       "TOTAL COSTS",
-      `GHS ${coreCosts.toLocaleString()}`,
-      `${costComplete.length} orders with costs entered`,
+      `GHS ${costPriceTotal.toLocaleString()}`,
+      `${costComplete.length} paid orders with product cost prices`,
     ],
     [
       "DISCOUNTS",
@@ -4345,29 +4423,19 @@ function AnalyticsPage({
       "Discount amounts recorded",
     ],
     [
-      "PAYSTACK FEES",
-      `GHS ${feeCosts.toLocaleString()}`,
-      "Actual fees entered",
-    ],
-    [
       "DELIVERY FEES",
       `GHS ${deliveryRevenue.toLocaleString()}`,
-      "Collected from customers",
+      "Collected from paid orders",
     ],
     [
-      "GROSS PROFIT",
-      `GHS ${gross.toLocaleString()}`,
-      `Before delivery and payment costs`,
-    ],
-    [
-      "NET EST. PROFIT",
-      `GHS ${net.toLocaleString()}`,
-      `${Math.max(0, filtered.length - costComplete.length)} orders missing cost entries`,
+      "SHOP PRODUCT PROFIT",
+      `GHS ${estimatedProfit.toLocaleString()}`,
+      "Paid shop sales with cost prices, less product cost prices",
     ],
     ["LOSSES / REFUNDS", `GHS ${refunds.toLocaleString()}`, "Refunds recorded"],
   ];
   const topProducts = new Map<string, number>();
-  filtered.forEach((o) =>
+  paid.forEach((o) =>
     o.order_items?.forEach((i) => {
       if (i.store_item_id)
         topProducts.set(
@@ -4385,7 +4453,7 @@ function AnalyticsPage({
     .slice(0, 5);
   const totalUnits = best.reduce((s, p) => s + p.count, 0);
   const categoryTotals = new Map<string, number>();
-  filtered.forEach((o) =>
+  paid.forEach((o) =>
     o.order_items?.forEach((i) => {
       const category =
         products.find((p) => p.id === i.store_item_id)?.category ?? "Other";
@@ -4408,7 +4476,7 @@ function AnalyticsPage({
       label: day
         .toLocaleDateString(undefined, { weekday: "short" })
         .toUpperCase(),
-      amount: filtered
+      amount:       paid
         .filter(
           (o) => new Date(o.created_at) >= day && new Date(o.created_at) < end,
         )
@@ -4424,7 +4492,7 @@ function AnalyticsPage({
         eyebrow="BUSINESS INTELLIGENCE"
         title="Analytics"
         action="Export CSV"
-        onAction={() => exportAnalytics(filtered)}
+        onAction={() => exportAnalytics(paid)}
       />
       <div className="date-pills">
         {[
@@ -4619,21 +4687,34 @@ function exportAnalytics(orders: Order[]) {
     "created_at",
     "amount_paid",
     "amount_refunded",
-    "actual_sourcing_cost",
-    "actual_printing_cost",
-    "actual_delivery_cost",
-    "actual_payment_fee",
-    "actual_other_cost",
+    "product_cost_price_total",
   ];
   const lines = [
     headers.join(","),
-    ...orders.map((o) =>
-      headers
-        .map((key) =>
-          JSON.stringify((o as unknown as Record<string, unknown>)[key] ?? ""),
-        )
-        .join(","),
-    ),
+    ...orders.map((o) => {
+      const costs = o.order_items ?? [];
+      const costTotal =
+        o.order_type === "store_purchase" &&
+        costs.length > 0 &&
+        costs.every((item) => item.estimated_unit_cost != null)
+          ? costs.reduce(
+              (sum, item) =>
+                sum +
+                Number(item.estimated_unit_cost) * Number(item.quantity),
+              0,
+            )
+          : "";
+      return [
+        o.order_code,
+        o.order_type,
+        o.created_at,
+        o.amount_paid,
+        o.amount_refunded,
+        costTotal,
+      ]
+        .map((value) => JSON.stringify(value ?? ""))
+        .join(",");
+    }),
   ];
   const url = URL.createObjectURL(
     new Blob([lines.join("\n")], { type: "text/csv" }),

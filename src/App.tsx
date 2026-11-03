@@ -46,6 +46,23 @@ type Product = {
   sizeOptions: string[];
   colorOptions: string[];
   description: string;
+  variants: { size: string; color: string; price: number }[];
+  additionalCosts: AdditionalCostOption[];
+};
+type AdditionalCostOption = {
+  id: string;
+  name: string;
+  price: number;
+  details_prompt: string;
+};
+type SelectedAdditionalCost = AdditionalCostOption & { details: string };
+type CartLineItem = {
+  id: string;
+  product: Product;
+  quantity: number;
+  size: string;
+  color: string;
+  additionalCosts: SelectedAdditionalCost[];
 };
 type Design = {
   id: string;
@@ -63,6 +80,13 @@ type AppliedDiscount = {
   max_cap: number | string | null;
   amount: number | string;
 };
+function getProductPrice(product: Product, size: string, color: string) {
+  return (
+    product.variants.find(
+      (variant) => variant.size === size && variant.color === color,
+    )?.price ?? product.price
+  );
+}
 const CatalogContext = createContext<{
   products: Product[];
   designs: Design[];
@@ -260,9 +284,7 @@ function App() {
         : "home",
   );
   const [menuOpen, setMenuOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
-  const [cartSize, setCartSize] = useState("");
-  const [cartColor, setCartColor] = useState("");
+  const [cartItems, setCartItems] = useState<CartLineItem[]>([]);
   const [cartProduct, setCartProduct] = useState<Product | null>(null);
   const [initialCategory, setInitialCategory] = useState<string | null>(null);
   const [discount, setDiscount] = useState<AppliedDiscount | null>(null);
@@ -271,6 +293,7 @@ function App() {
   const [toast, setToast] = useState("");
   const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
   const [activeImage, setActiveImage] = useState(0);
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
     let active = true;
@@ -280,11 +303,11 @@ function App() {
         return;
       }
       setCatalogLoading(true);
-      const [itemResult, designResult] = await Promise.all([
+      const [itemResult, designResult, variantResult] = await Promise.all([
         supabase
           .from("store_items")
           .select(
-            "id,name,category,description,price,image_paths,size_options,color_options,stock_quantity",
+            "id,name,category,description,price,image_paths,size_options,color_options,stock_quantity,additional_cost_options",
           )
           .eq("is_published", true)
           .eq("is_available", true)
@@ -295,9 +318,13 @@ function App() {
           .eq("published", true)
           .eq("category", "T-shirts")
           .order("created_at", { ascending: false }),
+        supabase
+          .from("product_variants")
+          .select("product_id,size,color,selling_price")
+          .eq("status", "active"),
       ]);
       if (!active) return;
-      if (itemResult.error || designResult.error)
+      if (itemResult.error || designResult.error || variantResult.error)
         setCatalogError(
           "We could not load the catalogue. Refresh to try again.",
         );
@@ -311,6 +338,13 @@ function App() {
         size_options: string[] | null;
         color_options: string[] | null;
         stock_quantity: number | null;
+        additional_cost_options: AdditionalCostOption[] | null;
+      }[];
+      const variants = (variantResult.data ?? []) as {
+        product_id: string;
+        size: string;
+        color: string;
+        selling_price: number | string;
       }[];
       setProducts(
         storeItems.map((item) => {
@@ -333,6 +367,16 @@ function App() {
                 : "In stock",
             sizeOptions: item.size_options ?? [],
             colorOptions: item.color_options ?? [],
+            variants: variants
+              .filter((variant) => variant.product_id === item.id)
+              .map((variant) => ({
+                size: variant.size,
+                color: variant.color,
+                price: Number(variant.selling_price),
+              })),
+            additionalCosts: (item.additional_cost_options ?? []).map(
+              (option) => ({ ...option, price: Number(option.price) || 0 }),
+            ),
           };
         }),
       );
@@ -502,18 +546,58 @@ function App() {
   const add = (
     product?: Product,
     quantity = 1,
-    options?: { size: string; color: string },
+    options?: {
+      size: string;
+      color: string;
+      additionalCosts?: SelectedAdditionalCost[];
+    },
   ) => {
-    if (product) {
-      setSelectedProduct(product);
-      setCartProduct(product);
-      setCartSize(options?.size ?? product.sizeOptions[0] ?? "");
-      setCartColor(options?.color ?? product.colorOptions[0] ?? "");
-    } else if (options) {
-      setCartSize(options.size);
-      setCartColor(options.color);
+    const targetProduct = product ?? selectedProduct;
+    if (!targetProduct) return;
+    const size = options?.size ?? targetProduct.sizeOptions[0] ?? "";
+    const color = options?.color ?? targetProduct.colorOptions[0] ?? "";
+    const additionalCosts = options?.additionalCosts ?? [];
+    if (product) setSelectedProduct(product);
+    setCartProduct(targetProduct);
+    const currentCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+    const acceptedQuantity = Math.min(quantity, Math.max(0, 20 - currentCount));
+    if (acceptedQuantity === 0) {
+      setToast("Your cart is limited to 20 items");
+      window.setTimeout(() => setToast(""), 1800);
+      return;
     }
-    setCartCount((count) => Math.min(20, count + quantity));
+    setDiscount(null);
+    const signature = JSON.stringify(
+      additionalCosts.map(({ id, details }) => ({ id, details })),
+    );
+    setCartItems((currentItems) => {
+      const match = currentItems.find(
+        (item) =>
+          item.product.id === targetProduct.id &&
+          item.size === size &&
+          item.color === color &&
+          JSON.stringify(
+            item.additionalCosts.map(({ id, details }) => ({ id, details })),
+          ) === signature,
+      );
+      return match
+        ? currentItems.map((item) =>
+            item.id === match.id
+              ? { ...item, quantity: item.quantity + acceptedQuantity }
+              : item,
+          )
+        : [
+            ...currentItems,
+            {
+              id: crypto.randomUUID(),
+              product: targetProduct,
+              quantity: acceptedQuantity,
+              size,
+              color,
+              additionalCosts,
+            },
+          ];
+    });
     setToast("Added to your cart");
     window.setTimeout(() => setToast(""), 1800);
   };
@@ -605,8 +689,12 @@ function App() {
               key={selectedProduct.id}
               product={selectedProduct}
               cartProduct={cartProduct}
-              add={(quantity, size, color) =>
-                add(undefined, quantity, { size, color })
+              add={(quantity, size, color, additionalCosts) =>
+                add(undefined, quantity, {
+                  size,
+                  color,
+                  additionalCosts,
+                })
               }
               go={go}
               selectProduct={setSelectedProduct}
@@ -617,13 +705,32 @@ function App() {
           {page === "cart" && (
             <Cart
               go={go}
-              product={selectedProduct}
-              count={cartCount}
-              setCount={(nextCount) => {
-                setCartCount(nextCount);
+              items={cartItems}
+              setCount={(itemId, nextCount) => {
+                const totalCount = cartItems.reduce(
+                  (sum, item) => sum + item.quantity,
+                  0,
+                );
+                setDiscount(null);
+                setCartItems((currentItems) =>
+                  currentItems
+                    .map((item) =>
+                      item.id === itemId
+                        ? {
+                            ...item,
+                            quantity: Math.min(
+                              nextCount,
+                              item.quantity + Math.max(0, 20 - totalCount),
+                            ),
+                          }
+                        : item,
+                    )
+                    .filter((item) => item.quantity > 0),
+                );
               }}
               clearCart={() => {
-                setCartCount(0);
+                setCartItems([]);
+                setDiscount(null);
                 setSelectedProduct(null);
               }}
               discount={discount}
@@ -633,10 +740,7 @@ function App() {
           {page === "checkout" && (
             <Checkout
               go={go}
-              product={selectedProduct}
-              count={cartCount}
-              size={cartSize}
-              color={cartColor}
+              items={cartItems}
               discount={discount}
             />
           )}
@@ -1080,7 +1184,12 @@ function ProductDetail({
 }: {
   product: Product;
   cartProduct?: Product | null;
-  add: (quantity: number, size: string, color: string) => void;
+  add: (
+    quantity: number,
+    size: string,
+    color: string,
+    additionalCosts: SelectedAdditionalCost[],
+  ) => void;
   go: (p: Page) => void;
   selectProduct: (p: Product) => void;
   activeImage: number;
@@ -1111,6 +1220,9 @@ function ProductDetail({
   }, [product, cartProduct, products]);
   const [size, setSize] = useState(product.sizeOptions[0] ?? "");
   const [color, setColor] = useState(product.colorOptions[0] ?? "");
+  const [selectedCosts, setSelectedCosts] = useState<
+    Record<string, { selected: boolean; details: string }>
+  >({});
   const [isAdded, setIsAdded] = useState(false);
   const [toast, setToast] = useState("");
   const [touchStartX, setTouchStartX] = useState(0);
@@ -1127,7 +1239,20 @@ function ProductDetail({
   };
 
   const handleAdd = () => {
-    add(qty, size, color);
+    const additionalCosts = product.additionalCosts
+      .filter((option) => selectedCosts[option.id]?.selected)
+      .map((option) => ({
+        ...option,
+        details: selectedCosts[option.id]?.details.trim() ?? "",
+      }));
+    const missingDetails = additionalCosts.find(
+      (option) => option.details_prompt && !option.details,
+    );
+    if (missingDetails) {
+      setToast(`Enter ${missingDetails.details_prompt.toLowerCase()}.`);
+      return;
+    }
+    add(qty, size, color, additionalCosts);
     setIsAdded(true);
     window.setTimeout(() => setIsAdded(false), 3000);
   };
@@ -1237,7 +1362,7 @@ function ProductDetail({
         </div>
         <div className="detail-copy">
           <div className="detail-price">
-            GHS {product.price.toLocaleString()}
+            GHS {getProductPrice(product, size, color).toLocaleString()}
           </div>
           {product.colorOptions.length > 0 && (
             <Option title="Colour">
@@ -1269,13 +1394,85 @@ function ProductDetail({
               </div>
             </Option>
           )}
-         <div className="action-row">
-          <div className="action-group">
-              <Icon name="whatsapp" /> WhatsApp enquiry
-              className="share-btn"
-              <img src="/share.png" alt="Share" className="share-icon" />
+          {product.additionalCosts.length > 0 && (
+            <Option title="Optional customisation">
+              <div className="additional-cost-options">
+                {product.additionalCosts.map((option) => {
+                  const selected = selectedCosts[option.id]?.selected ?? false;
+                  return (
+                    <div className="additional-cost-option" key={option.id}>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(event) =>
+                            setSelectedCosts((current) => ({
+                              ...current,
+                              [option.id]: {
+                                selected: event.target.checked,
+                                details: current[option.id]?.details ?? "",
+                              },
+                            }))
+                          }
+                        />
+                        <span>
+                          {option.name} <strong>+ GHS {option.price.toLocaleString()}</strong>
+                        </span>
+                      </label>
+                      {selected && option.details_prompt && (
+                        <label className="field">
+                          <span>{option.details_prompt}</span>
+                          <input
+                            required
+                            value={selectedCosts[option.id]?.details ?? ""}
+                            onChange={(event) =>
+                              setSelectedCosts((current) => ({
+                                ...current,
+                                [option.id]: {
+                                  selected: true,
+                                  details: event.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Option>
+          )}
+          <div className="product-purchase">
+            <div className="qty">
+              <button
+                type="button"
+                aria-label="Decrease quantity"
+                onClick={() => setQty((current) => Math.max(1, current - 1))}
+              >
+                <Icon name="minus" />
+              </button>
+              <span>{qty}</span>
+              <button
+                type="button"
+                aria-label="Increase quantity"
+                onClick={() => setQty((current) => Math.min(20, current + 1))}
+              >
+                <Icon name="plus" />
+              </button>
+            </div>
+            <Button onClick={handleAdd} variant={isAdded ? "outline" : "primary"}>
+              {isAdded ? "Added to cart ✓" : "Add to cart"}
+            </Button>
           </div>
-        </div>
+          <div className="action-row">
+            <button type="button" className="whatsapp-btn" onClick={handleWhatsApp}>
+              <Icon name="whatsapp" /> WhatsApp enquiry
+            </button>
+            <button type="button" className="share-btn" onClick={() => void fallbackShare(window.location.href)}>
+              <img src="/share.png" alt="" className="share-icon" /> Share
+            </button>
+          </div>
           <div className="description">
             <h3>Details</h3>
             <p>
@@ -1321,23 +1518,31 @@ function Option({
 
 function Cart({
   go,
-  product,
-  count,
+  items,
   setCount,
   clearCart,
   discount,
   onDiscountApplied,
 }: {
   go: (p: Page) => void;
-  product: Product | null;
-  count: number;
-  setCount: (count: number) => void;
+  items: CartLineItem[];
+  setCount: (itemId: string, count: number) => void;
   clearCart: () => void;
   discount: AppliedDiscount | null;
   onDiscountApplied: (discount: AppliedDiscount | null) => void;
 }) {
-  const items = product && count > 0 ? [product] : [];
-  const subtotal = product ? product.price * count : 0;
+  const count = items.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum +
+      (getProductPrice(item.product, item.size, item.color) +
+        item.additionalCosts.reduce(
+          (additionalSum, option) => additionalSum + option.price,
+          0,
+        )) *
+        item.quantity,
+    0,
+  );
   const [code, setCode] = useState(discount?.code ?? "");
   const [discountError, setDiscountError] = useState("");
   const [applying, setApplying] = useState(false);
@@ -1369,24 +1574,51 @@ function Cart({
       </div>
       <div className="cart-layout">
         <div className="cart-list">
-          {items.map((p) => (
-            <div className="cart-item" key={p.id}>
-              <img src={p.images[0] || ""} alt={p.name} />
+          {items.map((item) => (
+            <div className="cart-item" key={item.id}>
+              <img
+                src={item.product.images[0] || ""}
+                alt={item.product.name}
+              />
               <div className="cart-item-copy">
-                <span>{p.category}</span>
-                <h3>{p.name}</h3>
-                <p>Choose options at checkout</p>
+                <span>{item.product.category}</span>
+                <h3>{item.product.name}</h3>
+                <p>Size {item.size || "—"} · Colour {item.color || "—"}</p>
+                {item.additionalCosts.map((option) => (
+                  <p key={option.id}>
+                    {option.name}
+                    {option.details ? `: ${option.details}` : ""} · + GHS{" "}
+                    {option.price.toLocaleString()}
+                  </p>
+                ))}
                 <div className="qty small">
-                  <button onClick={() => setCount(Math.max(0, count - 1))}>
+                  <button
+                    onClick={() =>
+                      setCount(item.id, Math.max(0, item.quantity - 1))
+                    }
+                  >
                     <Icon name="minus" />
                   </button>
-                  <span>{count}</span>
-                  <button onClick={() => setCount(Math.min(20, count + 1))}>
+                  <span>{item.quantity}</span>
+                  <button
+                    onClick={() => setCount(item.id, item.quantity + 1)}
+                  >
                     <Icon name="plus" />
                   </button>
                 </div>
               </div>
-              <strong>GHS {(p.price * count).toLocaleString()}</strong>
+              <strong>
+                GHS{" "}
+                {(
+                  (getProductPrice(item.product, item.size, item.color) +
+                    item.additionalCosts.reduce(
+                      (additionalSum, option) =>
+                        additionalSum + option.price,
+                      0,
+                    )) *
+                  item.quantity
+                ).toLocaleString()}
+              </strong>
             </div>
           ))}
           {items.length === 0 && <p>Your cart is empty.</p>}
@@ -1458,17 +1690,11 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
 
 function Checkout({
   go,
-  product,
-  count,
-  size,
-  color,
+  items,
   discount,
 }: {
   go: (p: Page) => void;
-  product: Product | null;
-  count: number;
-  size: string;
-  color: string;
+  items: CartLineItem[];
   discount: AppliedDiscount | null;
 }) {
   const [step, setStep] = useState(1);
@@ -1496,7 +1722,17 @@ function Checkout({
   const [working, setWorking] = useState(false),
     [error, setError] = useState(""),
     [orderCode, setOrderCode] = useState("");
-  const subtotal = product ? product.price * count : 0;
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum +
+      (getProductPrice(item.product, item.size, item.color) +
+        item.additionalCosts.reduce(
+          (additionalSum, option) => additionalSum + option.price,
+          0,
+        )) *
+        item.quantity,
+    0,
+  );
   useEffect(() => {
     let alive = true;
     void Promise.all([
@@ -1548,7 +1784,7 @@ function Checkout({
   const chosenArea = area?.area ?? areaText.trim();
   async function pay() {
     setError("");
-    if (!product || count < 1) {
+    if (!items.length || items.some((item) => item.quantity < 1)) {
       setError("Your cart is empty.");
       return;
     }
@@ -1592,10 +1828,15 @@ function Checkout({
               Authorization: `Bearer ${publicSupabaseAnonKey}`,
             },
             body: JSON.stringify({
-              itemId: product.id,
-              quantity: count,
-              size,
-              color,
+              items: items.map((item) => ({
+                itemId: item.product.id,
+                quantity: item.quantity,
+                size: item.size,
+                color: item.color,
+                additionalCosts: item.additionalCosts.map(
+                  ({ id, details }) => ({ id, details }),
+                ),
+              })),
               discountCode: discount?.code ?? "",
               customer: { name, phone, email },
               delivery: {
@@ -1795,16 +2036,36 @@ function Checkout({
             </button>
             <h1>Ready when you are.</h1>
             <p>Review your order before making payment.</p>
-            {product && count > 0 ? (
+            {items.length > 0 ? (
               <div className="mini-order">
-                <div>
-                  <img src={product.images[0] || ""} alt="" />
-                  <span>
-                    <strong>{product.name}</strong>
-                    <small>Quantity {count}</small>
-                  </span>
-                  <b>GHS {subtotal.toLocaleString()}</b>
-                </div>
+                {items.map((item) => {
+                  const lineTotal =
+                    (getProductPrice(item.product, item.size, item.color) +
+                      item.additionalCosts.reduce(
+                        (sum, option) => sum + option.price,
+                        0,
+                      )) *
+                    item.quantity;
+                  return (
+                    <div key={item.id}>
+                      <img src={item.product.images[0] || ""} alt="" />
+                      <span>
+                        <strong>{item.product.name}</strong>
+                        <small>
+                          Size {item.size || "—"} · Colour {item.color || "—"} ·
+                          Quantity {item.quantity}
+                        </small>
+                        {item.additionalCosts.map((option) => (
+                          <small key={option.id}>
+                            {option.name}
+                            {option.details ? `: ${option.details}` : ""}
+                          </small>
+                        ))}
+                      </span>
+                      <b>GHS {lineTotal.toLocaleString()}</b>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p>Your cart is empty.</p>
