@@ -456,7 +456,7 @@ function App() {
       clearTag("twitter:image");
       return;
     }
-    const url = `${window.location.origin}/?product=${product.id}`;
+    const url = `${window.location.origin}/share/product/${product.id}/${activeImage}`;
     const image = product.images[activeImage] || product.images[0] || "";
     const description = `GHS ${product.price.toLocaleString()} — ${product.name}`;
     const title = `${product.name} | WearWise`;
@@ -471,7 +471,7 @@ function App() {
       el.setAttribute("content", content);
     };
 
-    setMeta("og:type", "website");
+    setMeta("og:type", "product");
     setMeta("og:title", title);
     setMeta("og:description", description);
     setMeta("og:image", image);
@@ -479,6 +479,7 @@ function App() {
     setMeta("twitter:title", title);
     setMeta("twitter:description", description);
     setMeta("twitter:image", image);
+    setMeta("twitter:card", "summary_large_image");
   }, [selectedProduct, products, activeImage]);
 
   useEffect(() => {
@@ -1225,18 +1226,76 @@ function ProductDetail({
   >({});
   const [isAdded, setIsAdded] = useState(false);
   const [toast, setToast] = useState("");
+  const [shareOptionsOpen, setShareOptionsOpen] = useState(false);
   const [touchStartX, setTouchStartX] = useState(0);
   const [touchStartY, setTouchStartY] = useState(0);
 
-  const fallbackShare = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setToast("Link copied to clipboard");
-      window.setTimeout(() => setToast(""), 2000);
-    } catch {
-      window.open(url, "_blank");
+  const handleShare = async () => {
+    const url = `${window.location.origin}/share/product/${product.id}/${activeImage}`;
+    const text = `${product.name} · GHS ${getProductPrice(product, size, color).toLocaleString()}`;
+    const imageUrl = product.images[activeImage] || product.images[0];
+
+    if (navigator.share) {
+      try {
+        if (imageUrl && navigator.canShare) {
+          try {
+            const response = await fetch(imageUrl);
+            if (response.ok) {
+              const image = await response.blob();
+              const extension = image.type.split("/")[1] || "jpeg";
+              const filename =
+                product.name.replace(/[^a-z0-9._-]+/gi, "_") || "wearwise-product";
+              const file = new File([image], `${filename}.${extension}`, {
+                type: image.type || "image/jpeg",
+              });
+              if (navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                  title: product.name,
+                  text,
+                  url,
+                  files: [file],
+                });
+                return;
+              }
+            }
+          } catch {
+            // Share the product link below when the image cannot be attached.
+          }
+        }
+        await navigator.share({ title: product.name, text, url });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setShareOptionsOpen(true);
+      }
+      return;
     }
+    setShareOptionsOpen(true);
   };
+
+  const shareUrl = `${window.location.origin}/share/product/${product.id}/${activeImage}`;
+  const shareText = `${product.name} · GHS ${getProductPrice(product, size, color).toLocaleString()}`;
+  const shareTargets = [
+    {
+      label: "WhatsApp",
+      href: `https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`,
+    },
+    {
+      label: "Telegram",
+      href: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`,
+    },
+    {
+      label: "Facebook",
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
+    },
+    {
+      label: "X",
+      href: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`,
+    },
+    {
+      label: "Email",
+      href: `mailto:?subject=${encodeURIComponent(product.name)}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`,
+    },
+  ];
 
   const handleAdd = () => {
     const additionalCosts = product.additionalCosts
@@ -1469,8 +1528,14 @@ function ProductDetail({
             <button type="button" className="whatsapp-btn" onClick={handleWhatsApp}>
               <Icon name="whatsapp" /> WhatsApp enquiry
             </button>
-            <button type="button" className="share-btn" onClick={() => void fallbackShare(window.location.href)}>
-              <img src="/share.png" alt="" className="share-icon" /> Share
+            <button
+              type="button"
+              className="share-btn"
+              aria-label={`Share ${product.name}`}
+              title="Share product"
+              onClick={() => void handleShare()}
+            >
+              <img src="/share.png" alt="" className="share-icon" />
             </button>
           </div>
           <div className="description">
@@ -1482,6 +1547,62 @@ function ProductDetail({
           </div>
         </div>
       </div>
+      {shareOptionsOpen && (
+        <div
+          className="share-dialog-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShareOptionsOpen(false);
+          }}
+        >
+          <section
+            className="share-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-dialog-title"
+          >
+            <button
+              className="share-dialog-close"
+              type="button"
+              aria-label="Close sharing options"
+              onClick={() => setShareOptionsOpen(false)}
+            >
+              ×
+            </button>
+            <span className="eyebrow">PASS IT ON</span>
+            <h2 id="share-dialog-title">Share this piece.</h2>
+            <p>{product.name} · GHS {getProductPrice(product, size, color).toLocaleString()}</p>
+            <div className="share-targets">
+              {shareTargets.map((target) => (
+                <a
+                  key={target.label}
+                  href={target.href}
+                  target={target.label === "Email" ? undefined : "_blank"}
+                  rel={target.label === "Email" ? undefined : "noreferrer"}
+                  onClick={() => setShareOptionsOpen(false)}
+                >
+                  {target.label}
+                </a>
+              ))}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    setShareOptionsOpen(false);
+                    setToast("Product link copied");
+                    window.setTimeout(() => setToast(""), 2000);
+                  } catch {
+                    setToast("Could not copy the product link.");
+                    window.setTimeout(() => setToast(""), 3000);
+                  }
+                }}
+              >
+                Copy link
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       <section className="related">
         <SectionHead title="You may also like." />
         <div className="product-row">

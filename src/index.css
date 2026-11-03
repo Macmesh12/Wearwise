@@ -2873,24 +2873,32 @@ footer {
 }
 
 .share-btn {
-  padding: 8px;
+  width: 44px;
+  height: 44px;
+  padding: 4px;
+  border: 0;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--gray-2);
-  background: var(--white);
-  transition: background 0.15s ease;
+  background: transparent;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .share-btn:hover {
   background: var(--gray-2);
+  transform: translateY(-1px);
+}
+
+.share-btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
 }
 
 .share-icon {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   stroke: var(--ink);
   stroke-width: 2;
@@ -2899,8 +2907,93 @@ footer {
 
 @media (max-width: 720px) {
   .share-icon {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.share-dialog-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(20 20 20 / 55%);
+}
+.share-dialog {
+  position: relative;
+  width: min(100%, 440px);
+  padding: 32px;
+  border-radius: 14px;
+  background: #f7f6f1;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
+}
+.share-dialog .eyebrow {
+  color: #77786e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+.share-dialog h2 {
+  margin: 10px 0 4px;
+  font-size: 28px;
+  letter-spacing: -0.8px;
+}
+.share-dialog > p {
+  margin: 0 0 22px;
+  color: #686961;
+  font-size: 13px;
+}
+.share-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #252620;
+  font-size: 26px;
+  cursor: pointer;
+}
+.share-dialog-close:hover {
+  background: #e8e7e0;
+}
+.share-targets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.share-targets a,
+.share-targets button {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dcdcd4;
+  border-radius: 8px;
+  background: #fff;
+  color: #171815;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.share-targets a:hover,
+.share-targets button:hover {
+  border-color: #b7c87b;
+  background: #f1f5e4;
+}
+.share-targets button {
+  grid-column: 1 / -1;
+}
+@media (max-width: 480px) {
+  .share-dialog {
+    padding: 28px 22px;
   }
 }
 

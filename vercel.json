@@ -4,6 +4,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/share/product/:id/:image",
+      "destination": "/api/product-share?id=:id&image=:image"
+    },
+    {
       "source": "/:path*",
       "destination": "/"
     }
