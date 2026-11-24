@@ -276,7 +276,8 @@ export default function AdminSections({
         <OrdersPage
           title={title}
           rows={data.orders.filter(
-            (o) => o.order_type === "store_purchase" || o.payment_status === "paid",
+            (o) =>
+              o.order_type === "store_purchase" || o.payment_status === "paid",
           )}
           designs={data.designs}
           discounts={data.discounts}
@@ -299,7 +300,7 @@ export default function AdminSections({
           say={say}
         />
       )}
-{page === "products" && (
+      {page === "products" && (
         <ProductsPage
           rows={data.products}
           variants={data.variants}
@@ -863,9 +864,9 @@ function OrderDetailDrawer({
   const productImage = useMemo(() => {
     const item = row.order_items?.[0];
     const product = products.find((p) => p.id === item?.store_item_id);
-    const colorIndex = product?.color_options.indexOf(item?.requested_color ?? "") ?? -1;
-    const path =
-      product?.image_paths?.[colorIndex >= 0 ? colorIndex : 0];
+    const colorIndex =
+      product?.color_options.indexOf(item?.requested_color ?? "") ?? -1;
+    const path = product?.image_paths?.[colorIndex >= 0 ? colorIndex : 0];
     return path
       ? supabase.storage.from("store-items").getPublicUrl(path).data.publicUrl
       : "";
@@ -887,16 +888,17 @@ function OrderDetailDrawer({
       active = false;
     };
   }, [row.customer_artwork_path]);
-  const coverImage = isShopOrder ? productImage : designImage || customerArtworkUrl;
+  const coverImage = isShopOrder
+    ? productImage
+    : designImage || customerArtworkUrl;
   const costPricesAvailable = Boolean(
     row.order_items?.length &&
-      row.order_items.every((item) => item.estimated_unit_cost != null),
+    row.order_items.every((item) => item.estimated_unit_cost != null),
   );
   const productCostPrice = costPricesAvailable
     ? (row.order_items ?? []).reduce(
         (sum, item) =>
-          sum +
-          Number(item.estimated_unit_cost) * Number(item.quantity),
+          sum + Number(item.estimated_unit_cost) * Number(item.quantity),
         0,
       )
     : null;
@@ -922,7 +924,7 @@ function OrderDetailDrawer({
             src={coverImage}
             alt={
               isShopOrder
-                ? row.order_items?.[0]?.product_name_snapshot ?? "product"
+                ? (row.order_items?.[0]?.product_name_snapshot ?? "product")
                 : "Requested design"
             }
           />
@@ -1152,7 +1154,9 @@ function RequestQuoteDrawer({
         .then(({ data, error }) => {
           if (!active) return;
           if (error)
-            say(`Could not load the customer artwork preview: ${error.message}`);
+            say(
+              `Could not load the customer artwork preview: ${error.message}`,
+            );
           else setCustomerArtworkUrl(data?.signedUrl ?? "");
         });
     return () => {
@@ -1390,11 +1394,8 @@ function RequestQuoteDrawer({
           <img
             src={designImage}
             alt={
-              String(
-                selectedDesign.title ??
-                  selectedDesign.name ??
-                  "design",
-              ) ?? "design"
+              String(selectedDesign.title ?? selectedDesign.name ?? "design") ??
+              "design"
             }
           />
         )}
@@ -1703,7 +1704,10 @@ function ShirtTypesPage({
     is_active: true,
   });
   function parseList(value: string) {
-    return value.split(",").map((x) => x.trim()).filter(Boolean);
+    return value
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
   }
   async function addShirtType(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1737,10 +1741,7 @@ function ShirtTypesPage({
     });
     onRefresh();
   }
-  async function saveShirtType(
-    id: string,
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function saveShirtType(id: string, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(id);
     const form = new FormData(event.currentTarget);
@@ -1804,9 +1805,7 @@ function ShirtTypesPage({
             <input
               name="name"
               value={draft.name}
-              onChange={(e) =>
-                setDraft({ ...draft, name: e.target.value })
-              }
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
           </label>
           <label className="field">
@@ -1814,9 +1813,7 @@ function ShirtTypesPage({
             <input
               name="category"
               value={draft.category}
-              onChange={(e) =>
-                setDraft({ ...draft, category: e.target.value })
-              }
+              onChange={(e) => setDraft({ ...draft, category: e.target.value })}
             />
           </label>
           <label className="field">
@@ -1824,9 +1821,7 @@ function ShirtTypesPage({
             <input
               name="sizes"
               value={draft.sizes}
-              onChange={(e) =>
-                setDraft({ ...draft, sizes: e.target.value })
-              }
+              onChange={(e) => setDraft({ ...draft, sizes: e.target.value })}
             />
           </label>
           <label className="field">
@@ -1834,9 +1829,7 @@ function ShirtTypesPage({
             <input
               name="colors"
               value={draft.colors}
-              onChange={(e) =>
-                setDraft({ ...draft, colors: e.target.value })
-              }
+              onChange={(e) => setDraft({ ...draft, colors: e.target.value })}
             />
           </label>
           <label className="field">
@@ -1878,10 +1871,7 @@ function ShirtTypesPage({
                     </label>
                     <label className="field">
                       <span>Category</span>
-                      <input
-                        name="category"
-                        defaultValue={t.category}
-                      />
+                      <input name="category" defaultValue={t.category} />
                     </label>
                     <label className="field">
                       <span>Sizes</span>
@@ -1991,9 +1981,9 @@ function ProductsPage({
   const [globalSellingPrice, setGlobalSellingPrice] = useState("");
   const [globalCostPrice, setGlobalCostPrice] = useState("");
   const [globalStock, setGlobalStock] = useState("10");
-  const [additionalCosts, setAdditionalCosts] = useState<AdditionalCostOption[]>(
-    [],
-  );
+  const [additionalCosts, setAdditionalCosts] = useState<
+    AdditionalCostOption[]
+  >([]);
   const [imagePathsToDelete, setImagePathsToDelete] = useState<string[]>([]);
   // colorImageMap[i] = colour assigned to image_paths[i] (magnet pairing).
   // Keeps colours and images aligned: reordering one reorders the other.
@@ -2017,9 +2007,17 @@ function ProductsPage({
       const first = saved[0];
       setSizes(sizeList);
       setColors(colorList);
-      setGlobalSellingPrice(first ? String(first.selling_price) : String(item.price));
-      setGlobalCostPrice(first && first.cost_price != null ? String(first.cost_price) : "");
-      setGlobalStock(saved.length ? String(saved[0].stock) : String(item.stock_quantity ?? 0));
+      setGlobalSellingPrice(
+        first ? String(first.selling_price) : String(item.price),
+      );
+      setGlobalCostPrice(
+        first && first.cost_price != null ? String(first.cost_price) : "",
+      );
+      setGlobalStock(
+        saved.length
+          ? String(saved[0].stock)
+          : String(item.stock_quantity ?? 0),
+      );
       setDrafts(
         saved.length
           ? saved.map((v) => ({
@@ -2045,7 +2043,9 @@ function ProductsPage({
       const existingImages = item.image_paths ?? [];
       const initMap: string[] = [];
       for (let i = 0; i < existingImages.length; i++) {
-        initMap.push(existingColors[i] ?? existingColors[existingColors.length - 1] ?? "");
+        initMap.push(
+          existingColors[i] ?? existingColors[existingColors.length - 1] ?? "",
+        );
       }
       setColorImageMap(initMap);
       setOrderedImagePaths([...existingImages]);
@@ -2123,7 +2123,9 @@ function ProductsPage({
         : editing && typeof editing === "object"
           ? [...editing.image_paths]
           : [];
-    const pathsToKeep = existingPaths.filter((p) => !imagePathsToDelete.includes(p));
+    const pathsToKeep = existingPaths.filter(
+      (p) => !imagePathsToDelete.includes(p),
+    );
     if (imagePathsToDelete.length) {
       const { error: delError } = await supabase.storage
         .from("store-items")
@@ -2392,71 +2394,74 @@ function ProductsPage({
                   const minCost = Math.min(...costs);
                   const maxCost = Math.max(...costs);
                   return (
-                  <tr key={r.id}>
-                    <td>
-                      <input type="checkbox" aria-label={`Select ${r.name}`} />
-                    </td>
-                    <td>
-                      <div className="item-cell">
-                        {r.image_paths?.[0] && (
-                          <img
-                            src={
-                              supabase.storage
-                                .from("store-items")
-                                .getPublicUrl(r.image_paths[0]).data.publicUrl
-                            }
-                            alt=""
-                          />
-                        )}
-                        <strong>{r.name}</strong>
-                      </div>
-                    </td>
-                    <td>{r.category}</td>
-                    <td>
-                      <strong>GHS {Number(r.price).toLocaleString()}</strong>
-                    </td>
-                    <td className="muted">
-                      {costs.length === 0
-                        ? "—"
-                        : minCost === maxCost
-                          ? `GHS ${minCost.toLocaleString()}`
-                          : `GHS ${minCost.toLocaleString()}–${maxCost.toLocaleString()}`}
-                    </td>
-                    <td>
-                      <b
-                        className={
-                          r.stock_quantity !== null && r.stock_quantity < 5
-                            ? "stock-alert"
-                            : ""
-                        }
-                      >
-                        {r.stock_quantity ?? "—"}
-                      </b>
-                    </td>
-                    <td>
-                      <Status>
-                        {!r.is_available
-                          ? "Unavailable"
-                          : r.is_published
-                            ? "Active"
-                            : "Hidden"}
-                      </Status>
-                    </td>
-                    <td>
-                      <button
-                        className="more-button"
-                        onClick={() => openEditor(r)}
-                      >
-                        •••
-                      </button>
-                      <button
-                        className="table-link danger"
-                        onClick={() => void removeProduct(r)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                    <tr key={r.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${r.name}`}
+                        />
+                      </td>
+                      <td>
+                        <div className="item-cell">
+                          {r.image_paths?.[0] && (
+                            <img
+                              src={
+                                supabase.storage
+                                  .from("store-items")
+                                  .getPublicUrl(r.image_paths[0]).data.publicUrl
+                              }
+                              alt=""
+                            />
+                          )}
+                          <strong>{r.name}</strong>
+                        </div>
+                      </td>
+                      <td>{r.category}</td>
+                      <td>
+                        <strong>GHS {Number(r.price).toLocaleString()}</strong>
+                      </td>
+                      <td className="muted">
+                        {costs.length === 0
+                          ? "—"
+                          : minCost === maxCost
+                            ? `GHS ${minCost.toLocaleString()}`
+                            : `GHS ${minCost.toLocaleString()}–${maxCost.toLocaleString()}`}
+                      </td>
+                      <td>
+                        <b
+                          className={
+                            r.stock_quantity !== null && r.stock_quantity < 5
+                              ? "stock-alert"
+                              : ""
+                          }
+                        >
+                          {r.stock_quantity ?? "—"}
+                        </b>
+                      </td>
+                      <td>
+                        <Status>
+                          {!r.is_available
+                            ? "Unavailable"
+                            : r.is_published
+                              ? "Active"
+                              : "Hidden"}
+                        </Status>
+                      </td>
+                      <td>
+                        <button
+                          className="more-button"
+                          onClick={() => openEditor(r)}
+                        >
+                          •••
+                        </button>
+                        <button
+                          className="table-link danger"
+                          onClick={() => void removeProduct(r)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -2590,10 +2595,18 @@ function ProductsPage({
                         .split(",")
                         .map((s) => s.trim())
                         .filter(Boolean);
-                      const currentSizes = orderedSizeOptions.filter((s) => s.trim());
-                      const newSizes = sizeList.filter((s) => !currentSizes.includes(s));
-                      const deletedSizes = currentSizes.filter((s) => !sizeList.includes(s));
-                      let next = orderedSizeOptions.filter((s) => !deletedSizes.includes(s));
+                      const currentSizes = orderedSizeOptions.filter((s) =>
+                        s.trim(),
+                      );
+                      const newSizes = sizeList.filter(
+                        (s) => !currentSizes.includes(s),
+                      );
+                      const deletedSizes = currentSizes.filter(
+                        (s) => !sizeList.includes(s),
+                      );
+                      let next = orderedSizeOptions.filter(
+                        (s) => !deletedSizes.includes(s),
+                      );
                       newSizes.forEach((s) => {
                         if (!next.includes(s)) next.push(s);
                       });
@@ -2617,9 +2630,15 @@ function ProductsPage({
                         .split(",")
                         .map((c) => c.trim())
                         .filter(Boolean);
-                      const currentUnique = [...new Set(colorImageMap.filter((c) => c.trim()))];
-                      const newColors = colorList.filter((c) => !currentUnique.includes(c));
-                      const deletedColors = currentUnique.filter((c) => !colorList.includes(c));
+                      const currentUnique = [
+                        ...new Set(colorImageMap.filter((c) => c.trim())),
+                      ];
+                      const newColors = colorList.filter(
+                        (c) => !currentUnique.includes(c),
+                      );
+                      const deletedColors = currentUnique.filter(
+                        (c) => !colorList.includes(c),
+                      );
                       let next = colorImageMap.map((c) =>
                         deletedColors.includes(c) ? "" : c,
                       );
@@ -2695,9 +2714,9 @@ function ProductsPage({
                     // Sync the per-image colour map with the entered colours
                     // so every colour can be assigned to an image position.
                     if (orderedImagePaths.length > 0) {
-                      const next = colorList.slice(0, orderedImagePaths.length).map(
-                        (c, i) => colorImageMap[i]?.trim() || c,
-                      );
+                      const next = colorList
+                        .slice(0, orderedImagePaths.length)
+                        .map((c, i) => colorImageMap[i]?.trim() || c);
                       setColorImageMap(next);
                     } else {
                       setColorImageMap([...colorList]);
@@ -2739,7 +2758,10 @@ function ProductsPage({
                                 setDrafts((currentDrafts) =>
                                   currentDrafts.map((draft, draftIndex) =>
                                     draftIndex === index
-                                      ? { ...draft, cost_price: event.target.value }
+                                      ? {
+                                          ...draft,
+                                          cost_price: event.target.value,
+                                        }
                                       : draft,
                                   ),
                                 )
@@ -2826,7 +2848,8 @@ function ProductsPage({
                     />
                   </label>
                   <label className="admin-form-wide">
-                    Details prompt (optional; required from customers when selected)
+                    Details prompt (optional; required from customers when
+                    selected)
                     <input
                       value={option.details_prompt}
                       placeholder="e.g. Enter the name and number"
@@ -2849,7 +2872,9 @@ function ProductsPage({
                     className="table-link danger"
                     onClick={() =>
                       setAdditionalCosts((currentCosts) =>
-                        currentCosts.filter((_, optionIndex) => optionIndex !== index),
+                        currentCosts.filter(
+                          (_, optionIndex) => optionIndex !== index,
+                        ),
                       )
                     }
                   >
@@ -2868,7 +2893,10 @@ function ProductsPage({
             </label>
             <label className="admin-form-wide">
               Photos (JPEG, PNG, WebP · max 5 MB each)
-              <p className="photo-hint" style={{ marginTop: 4, fontSize: 11, color: "#6e726b" }}>
+              <p
+                className="photo-hint"
+                style={{ marginTop: 4, fontSize: 11, color: "#6e726b" }}
+              >
                 Each image is paired with a colour (magnet). Reordering images
                 moves their colours with them. On the product page, tapping a
                 colour shows its paired image.
@@ -2895,7 +2923,9 @@ function ProductsPage({
                               setColorImageMap(next);
                               // Sync the colours text input so variants stay
                               // consistent with the per-image colour map.
-                              const uniqueColors = [...new Set(next.filter((c) => c.trim()))];
+                              const uniqueColors = [
+                                ...new Set(next.filter((c) => c.trim())),
+                              ];
                               setColors(uniqueColors.join(", "));
                             }}
                             className="photo-color-input"
@@ -2907,11 +2937,23 @@ function ProductsPage({
                             onClick={() => {
                               const nextPaths = [...orderedImagePaths];
                               const nextColors = [...colorImageMap];
-                              [nextPaths[i - 1], nextPaths[i]] = [nextPaths[i], nextPaths[i - 1]];
-                              [nextColors[i - 1], nextColors[i]] = [nextColors[i], nextColors[i - 1]];
+                              [nextPaths[i - 1], nextPaths[i]] = [
+                                nextPaths[i],
+                                nextPaths[i - 1],
+                              ];
+                              [nextColors[i - 1], nextColors[i]] = [
+                                nextColors[i],
+                                nextColors[i - 1],
+                              ];
                               setOrderedImagePaths(nextPaths);
                               setColorImageMap(nextColors);
-                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                              setColors(
+                                [
+                                  ...new Set(
+                                    nextColors.filter((c) => c.trim()),
+                                  ),
+                                ].join(", "),
+                              );
                             }}
                             aria-label="Move image up"
                           >
@@ -2924,11 +2966,23 @@ function ProductsPage({
                             onClick={() => {
                               const nextPaths = [...orderedImagePaths];
                               const nextColors = [...colorImageMap];
-                              [nextPaths[i + 1], nextPaths[i]] = [nextPaths[i], nextPaths[i + 1]];
-                              [nextColors[i + 1], nextColors[i]] = [nextColors[i], nextColors[i + 1]];
+                              [nextPaths[i + 1], nextPaths[i]] = [
+                                nextPaths[i],
+                                nextPaths[i + 1],
+                              ];
+                              [nextColors[i + 1], nextColors[i]] = [
+                                nextColors[i],
+                                nextColors[i + 1],
+                              ];
                               setOrderedImagePaths(nextPaths);
                               setColorImageMap(nextColors);
-                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                              setColors(
+                                [
+                                  ...new Set(
+                                    nextColors.filter((c) => c.trim()),
+                                  ),
+                                ].join(", "),
+                              );
                             }}
                             aria-label="Move image down"
                           >
@@ -2938,12 +2992,25 @@ function ProductsPage({
                             type="button"
                             className="photo-remove"
                             onClick={() => {
-                              setImagePathsToDelete([...imagePathsToDelete, path]);
-                              const nextPaths = orderedImagePaths.filter((_, idx) => idx !== i);
-                              const nextColors = colorImageMap.filter((_, idx) => idx !== i);
+                              setImagePathsToDelete([
+                                ...imagePathsToDelete,
+                                path,
+                              ]);
+                              const nextPaths = orderedImagePaths.filter(
+                                (_, idx) => idx !== i,
+                              );
+                              const nextColors = colorImageMap.filter(
+                                (_, idx) => idx !== i,
+                              );
                               setOrderedImagePaths(nextPaths);
                               setColorImageMap(nextColors);
-                              setColors([...new Set(nextColors.filter((c) => c.trim()))].join(", "));
+                              setColors(
+                                [
+                                  ...new Set(
+                                    nextColors.filter((c) => c.trim()),
+                                  ),
+                                ].join(", "),
+                              );
                             }}
                           >
                             ×
@@ -3844,22 +3911,69 @@ function DeliveryPage({
     e.preventDefault();
     setBusy(true);
     const f = new FormData(e.currentTarget),
+      normalize = (value: string) =>
+        value.trim().replace(/\s+/g, " ").toLowerCase(),
+      region = String(f.get("region") ?? "")
+        .trim()
+        .replace(/\s+/g, " "),
+      areaName = String(f.get("area") ?? "")
+        .trim()
+        .replace(/\s+/g, " "),
+      fee = Number(f.get("fee") ?? 0),
       values = {
-        region: String(f.get("region") ?? "").trim(),
-        area: String(f.get("area") ?? "").trim(),
-        fee: Number(f.get("fee") ?? 0),
+        region,
+        area: areaName,
+        fee,
         free_delivery: f.get("free") === "on",
         status: String(f.get("status") ?? "active"),
         updated_at: new Date().toISOString(),
       };
-    const result = current
+
+    if (!region || !areaName) {
+      say("Enter both a region and an area.");
+      setBusy(false);
+      return;
+    }
+    if (!Number.isFinite(fee) || fee < 0) {
+      say("Delivery fee must be zero or greater.");
+      setBusy(false);
+      return;
+    }
+
+    const regionKey = normalize(region);
+    const areaKey = normalize(areaName);
+    const duplicate = areas.find(
+      (row) =>
+        row.id !== current?.id &&
+        normalize(row.region) === regionKey &&
+        normalize(row.area) === areaKey,
+    );
+
+    if (duplicate && current) {
+      say("A delivery area already exists for this region and area.");
+      setBusy(false);
+      return;
+    }
+
+    const result = duplicate
       ? await supabase
           .from("delivery_areas")
           .update(values)
-          .eq("id", current.id)
-      : await supabase.from("delivery_areas").insert(values);
-    if (result.error) say(result.error.message);
-    else {
+          .eq("id", duplicate.id)
+      : current
+        ? await supabase
+            .from("delivery_areas")
+            .update(values)
+            .eq("id", current.id)
+        : await supabase.from("delivery_areas").insert(values);
+
+    if (result.error) {
+      if (result.error.code === "23505") {
+        say("A delivery area already exists for this region and area.");
+      } else {
+        say(result.error.message);
+      }
+    } else {
       say("Delivery area saved.");
       setEditing(null);
       onRefresh();
@@ -4366,8 +4480,8 @@ function AnalyticsPage({
         : date >= start;
   });
   const paid = filtered.filter(
-    (o) => o.payment_status === "paid" && Number(o.amount_paid) > 0,
-  ),
+      (o) => o.payment_status === "paid" && Number(o.amount_paid) > 0,
+    ),
     sales = paid.reduce(
       (s, o) => s + Number(o.amount_paid) - Number(o.amount_refunded),
       0,
@@ -4384,8 +4498,7 @@ function AnalyticsPage({
         s +
         (o.order_items ?? []).reduce(
           (itemCost, item) =>
-            itemCost +
-            Number(item.estimated_unit_cost) * Number(item.quantity),
+            itemCost + Number(item.estimated_unit_cost) * Number(item.quantity),
           0,
         ),
       0,
@@ -4476,7 +4589,7 @@ function AnalyticsPage({
       label: day
         .toLocaleDateString(undefined, { weekday: "short" })
         .toUpperCase(),
-      amount:       paid
+      amount: paid
         .filter(
           (o) => new Date(o.created_at) >= day && new Date(o.created_at) < end,
         )
@@ -4699,8 +4812,7 @@ function exportAnalytics(orders: Order[]) {
         costs.every((item) => item.estimated_unit_cost != null)
           ? costs.reduce(
               (sum, item) =>
-                sum +
-                Number(item.estimated_unit_cost) * Number(item.quantity),
+                sum + Number(item.estimated_unit_cost) * Number(item.quantity),
               0,
             )
           : "";
