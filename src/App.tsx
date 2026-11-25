@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import Admin from "./Admin";
 import {
   publicSupabaseAnonKey,
@@ -836,6 +837,7 @@ function App() {
         <BottomNav page={page} cartCount={cartCount} go={go} />
       </div>
       <Analytics />
+      <SpeedInsights />
     </CatalogContext.Provider>
   );
 }
